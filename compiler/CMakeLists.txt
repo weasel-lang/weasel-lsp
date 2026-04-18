@@ -1,7 +1,7 @@
 add_library(weasel_compiler STATIC
     src/source.cpp
     src/scanner.cpp
-    src/jsx_parser.cpp
+    src/ccx_parser.cpp
     src/emitter.cpp
     src/transpiler.cpp
 )

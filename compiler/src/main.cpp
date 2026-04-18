@@ -30,7 +30,9 @@ int main(int argc, char** argv) {
             return 2;
         }
     }
-    if (input.empty()) { usage(); return 2; }
+    if (input.empty()) {
+        usage(); return 2;
+    }
     if (output.empty()) {
         auto dot = input.find_last_of('.');
         output = (dot == std::string::npos) ? input + ".cc" : input.substr(0, dot) + ".cc";

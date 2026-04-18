@@ -85,34 +85,51 @@ std::string_view scanner::read_raw_string_literal() {
 }
 
 std::string_view scanner::read_line_comment() {
-    if (peek() != '/' || peek(1) != '/') return {};
+    if (peek() != '/' || peek(1) != '/') {
+        return {};
+    }
     size_t start = pos_;
-    while (!eof() && peek() != '\n') advance();
+    while (!eof() && peek() != '\n') {
+        advance();
+    }
     return view(start, pos_);
 }
 
 std::string_view scanner::read_block_comment() {
-    if (peek() != '/' || peek(1) != '*') return {};
+    if (peek() != '/' || peek(1) != '*') {
+        return {};
+    }
     size_t start = pos_;
     advance(2);
     while (!eof()) {
-        if (peek() == '*' && peek(1) == '/') { advance(2); break; }
+        if (peek() == '*' && peek(1) == '/') {
+            advance(2);
+            break;
+        }
         advance();
     }
     return view(start, pos_);
 }
 
 std::string_view scanner::read_preprocessor_line() {
-    if (peek() != '#') return {};
+    if (peek() != '#') {
+        return {};
+    }
     size_t start = pos_;
     while (!eof()) {
         if (peek() == '\\' && (peek(1) == '\n' || (peek(1) == '\r' && peek(2) == '\n'))) {
             advance();
-            if (peek() == '\r') advance();
-            if (peek() == '\n') advance();
+            if (peek() == '\r') {
+                advance();
+            }
+            if (peek() == '\n') {
+                advance();
+            }
             continue;
         }
-        if (peek() == '\n') break;
+        if (peek() == '\n') {
+            break;
+        }
         advance();
     }
     return view(start, pos_);
@@ -120,7 +137,9 @@ std::string_view scanner::read_preprocessor_line() {
 
 std::string_view scanner::read_whitespace() {
     size_t start = pos_;
-    while (is_whitespace(peek())) advance();
+    while (is_whitespace(peek())) {
+        advance();
+    }
     return view(start, pos_);
 }
 

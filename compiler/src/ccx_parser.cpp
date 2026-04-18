@@ -1,4 +1,4 @@
-#include "weasel/compiler/jsx_parser.hpp"
+#include "weasel/compiler/ccx_parser.hpp"
 #include "weasel/compiler/scanner.hpp"
 #include <sstream>
 #include <stdexcept>
@@ -25,16 +25,16 @@ std::string read_tag_name(scanner& s) {
     return id;
 }
 
-std::vector<jsx_node> parse_children(scanner& s,
+std::vector<ccx_node> parse_children(scanner& s,
                                      const std::unordered_set<std::string>& comps,
                                      const brace_capture_fn& cap,
                                      bool terminator_is_rbrace,
                                      std::string_view element_name);
 
-jsx_node parse_block_body(scanner& s,
+ccx_node parse_block_body(scanner& s,
                           const std::unordered_set<std::string>& comps,
                           const brace_capture_fn& cap,
-                          std::vector<jsx_node>& out_children) {
+                          std::vector<ccx_node>& out_children) {
     // Precondition: we're about to consume '{'
     skip_ws(s);
     if (s.peek() != '{') fail(s, "expected '{' for block body");
@@ -45,26 +45,26 @@ jsx_node parse_block_body(scanner& s,
     return {};
 }
 
-jsx_node parse_if_child(scanner& s,
+ccx_node parse_if_child(scanner& s,
                         const std::unordered_set<std::string>& comps,
                         const brace_capture_fn& cap) {
-    jsx_node n;
-    n.k = jsx_node::kind::if_chain;
+    ccx_node n;
+    n.k = ccx_node::kind::if_chain;
     // Keyword 'if' already consumed by caller.
-    auto parse_cond_and_body = [&](jsx_node::if_branch& br) {
+    auto parse_cond_and_body = [&](ccx_node::if_branch& br) {
         skip_ws(s);
         if (s.peek() != '(') fail(s, "expected '(' after 'if'");
         s.advance();
         std::ostringstream cond;
         cap(cond);
         br.cond_cpp = cond.str();
-        std::vector<jsx_node> body;
+        std::vector<ccx_node> body;
         parse_block_body(s, comps, cap, body);
         br.body = std::move(body);
     };
 
     {
-        jsx_node::if_branch first;
+        ccx_node::if_branch first;
         parse_cond_and_body(first);
         n.branches.push_back(std::move(first));
     }
@@ -79,15 +79,15 @@ jsx_node parse_if_child(scanner& s,
         if (scanner::is_ident_start(s.peek())) {
             auto id2 = s.read_identifier();
             if (id2 != "if") fail(s, "expected 'if' or '{' after 'else'");
-            jsx_node::if_branch br;
+            ccx_node::if_branch br;
             parse_cond_and_body(br);
             n.branches.push_back(std::move(br));
             continue;
         }
         if (s.peek() != '{') fail(s, "expected '{' or 'if' after 'else'");
-        jsx_node::if_branch else_br;
+        ccx_node::if_branch else_br;
         else_br.is_else = true;
-        std::vector<jsx_node> body;
+        std::vector<ccx_node> body;
         parse_block_body(s, comps, cap, body);
         else_br.body = std::move(body);
         n.branches.push_back(std::move(else_br));
@@ -96,41 +96,41 @@ jsx_node parse_if_child(scanner& s,
     return n;
 }
 
-jsx_node parse_for_child(scanner& s,
+ccx_node parse_for_child(scanner& s,
                          const std::unordered_set<std::string>& comps,
                          const brace_capture_fn& cap) {
-    jsx_node n;
-    n.k = jsx_node::kind::for_loop;
+    ccx_node n;
+    n.k = ccx_node::kind::for_loop;
     skip_ws(s);
     if (s.peek() != '(') fail(s, "expected '(' after 'for'");
     s.advance();
     std::ostringstream head;
     cap(head);
     n.head_cpp = head.str();
-    std::vector<jsx_node> body;
+    std::vector<ccx_node> body;
     parse_block_body(s, comps, cap, body);
     n.children = std::move(body);
     return n;
 }
 
-jsx_node parse_while_child(scanner& s,
+ccx_node parse_while_child(scanner& s,
                            const std::unordered_set<std::string>& comps,
                            const brace_capture_fn& cap) {
-    jsx_node n;
-    n.k = jsx_node::kind::while_loop;
+    ccx_node n;
+    n.k = ccx_node::kind::while_loop;
     skip_ws(s);
     if (s.peek() != '(') fail(s, "expected '(' after 'while'");
     s.advance();
     std::ostringstream head;
     cap(head);
     n.head_cpp = head.str();
-    std::vector<jsx_node> body;
+    std::vector<ccx_node> body;
     parse_block_body(s, comps, cap, body);
     n.children = std::move(body);
     return n;
 }
 
-jsx_node parse_brace_child(scanner& s,
+ccx_node parse_brace_child(scanner& s,
                            const std::unordered_set<std::string>& comps,
                            const brace_capture_fn& cap) {
     // Precondition: s.peek() == '{'
@@ -139,7 +139,7 @@ jsx_node parse_brace_child(scanner& s,
     skip_ws(s);
     if (scanner::is_ident_start(s.peek())) {
         auto id = s.read_identifier();
-        jsx_node result;
+        ccx_node result;
         bool handled = false;
         if (id == "if")         { result = parse_if_child(s, comps, cap); handled = true; }
         else if (id == "for")   { result = parse_for_child(s, comps, cap); handled = true; }
@@ -154,14 +154,14 @@ jsx_node parse_brace_child(scanner& s,
     }
     std::ostringstream oss;
     cap(oss);
-    jsx_node n;
-    n.k = jsx_node::kind::expr_child;
+    ccx_node n;
+    n.k = ccx_node::kind::expr_child;
     n.expr_text = oss.str();
     return n;
 }
 
-jsx_attr parse_attr(scanner& s, const brace_capture_fn& cap) {
-    jsx_attr a;
+ccx_attr parse_attr(scanner& s, const brace_capture_fn& cap) {
+    ccx_attr a;
     a.name = std::string(s.read_identifier());
     if (a.name.empty()) fail(s, "expected attribute name");
     skip_ws(s);
@@ -249,12 +249,12 @@ std::string read_text_run(scanner& s, bool stop_at_rbrace) {
     return out;
 }
 
-std::vector<jsx_node> parse_children(scanner& s,
+std::vector<ccx_node> parse_children(scanner& s,
                                      const std::unordered_set<std::string>& comps,
                                      const brace_capture_fn& cap,
                                      bool terminator_is_rbrace,
                                      std::string_view element_name) {
-    std::vector<jsx_node> children;
+    std::vector<ccx_node> children;
     while (!s.eof()) {
         char c = s.peek();
         if (c == '<') {
@@ -281,8 +281,8 @@ std::vector<jsx_node> parse_children(scanner& s,
             std::string text = read_text_run(s, terminator_is_rbrace);
             std::string normalized = normalize_text(text);
             if (!normalized.empty()) {
-                jsx_node n;
-                n.k = jsx_node::kind::text;
+                ccx_node n;
+                n.k = ccx_node::kind::text;
                 n.text_content = normalized;
                 children.push_back(std::move(n));
             }
@@ -294,14 +294,14 @@ std::vector<jsx_node> parse_children(scanner& s,
 
 } // namespace
 
-jsx_node parse_element(scanner& s,
+ccx_node parse_element(scanner& s,
                        const std::unordered_set<std::string>& comps,
                        const brace_capture_fn& cap) {
     if (s.peek() != '<') fail(s, "expected '<' at element start");
     s.advance();
     skip_ws(s);
-    jsx_node n;
-    n.k = jsx_node::kind::element;
+    ccx_node n;
+    n.k = ccx_node::kind::element;
     n.tag_name = read_tag_name(s);
     n.is_component = comps.count(n.tag_name) > 0;
     // Parse attributes

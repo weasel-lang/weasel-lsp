@@ -38,7 +38,9 @@ size_t source_buffer::line_of(size_t offset) const {
 
 source_buffer load_source(const std::string& filename) {
     std::ifstream in(filename, std::ios::binary);
-    if (!in) throw std::runtime_error("cannot open file: " + filename);
+    if (!in) {
+        throw std::runtime_error("cannot open file: " + filename);
+    }
     std::ostringstream oss;
     oss << in.rdbuf();
     return source_buffer{filename, oss.str()};

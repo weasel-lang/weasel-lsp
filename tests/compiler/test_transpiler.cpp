@@ -20,7 +20,7 @@ TEST_CASE("passthrough: no weasel syntax = identical output") {
         "int main() {\n"
         "    int a = 1, b = 2;\n"
         "    if (a < b) { return 0; }\n"
-        "    std::string s = \"<div>not jsx</div>\";\n"
+        "    std::string s = \"<div>not ccx</div>\";\n"
         "    return 0;\n"
         "}\n";
     CHECK(run(src) == src);
