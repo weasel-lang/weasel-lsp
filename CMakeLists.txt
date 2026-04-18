@@ -11,6 +11,11 @@ target_compile_features(weasel PUBLIC cxx_std_20)
 
 option(WEASEL_BUILD_TESTS    "Build the weasel test suite" ON)
 option(WEASEL_BUILD_EXAMPLES "Build the weasel examples"  ON)
+option(WEASEL_BUILD_COMPILER "Build the weasel compiler"  ON)
+
+if(WEASEL_BUILD_COMPILER)
+    add_subdirectory(compiler)
+endif()
 
 if(WEASEL_BUILD_TESTS)
     enable_testing()

@@ -28,39 +28,47 @@ struct task_list_props {
     std::optional<std::string> title;
 };
 
-node badge(const badge_props& p) {
+component badge(const badge_props& p) {
     std::string cls = "badge";
-    if (p.color) cls += " badge-" + *p.color;
-    return tag("span", {{"class", cls}}, {text(p.label)});
+    if (p.color) {
+        cls += " badge-" + *p.color;
+    }
+    return <span class={cls}>{p.label}</span>;
 }
 
-node task_item(const task_item_props& p) {
+component task_item(const task_item_props& p) {
     const bool show = p.show_assignee.value_or(true);
-
-    node_list children;
-    children.push_back(tag("h3", {{"class", "task-title"}}, {text(p.item.title)}));
-    if (show && !p.item.assignee.empty()) {
-        children.push_back(tag("p", {{"class", "assignee"}}, {
-            text("Assigned to: "),
-            badge({.label = p.item.assignee, .color = "blue"})
-        }));
-    }
-    return tag("li", {{"class", "task-item"}}, std::move(children));
+    return (
+        <li class="task-item">
+            <h3 class="task-title">{p.item.title}</h3>
+            {
+                if (show && !p.item.assignee.empty()) {
+                    <p class="assignee">
+                        Assigned to: <badge label={p.item.assignee} color="blue" />
+                    </p>
+                }
+            }
+        </li>
+    );
 }
 
-node task_list(const task_list_props& p) {
-    node_list cards;
-    for (const auto& t : p.items) {
-        cards.push_back(task_item({.item = t}));
-    }
-
-    node_list body;
-    if (p.title) {
-        body.push_back(tag("h2", {}, {text(*p.title)}));
-    }
-    body.push_back(tag("ul", {{"class", "task-list"}}, std::move(cards)));
-
-    return tag("div", {{"class", "page"}}, std::move(body));
+component task_list(const task_list_props& p) {
+    return (
+        <div class="page">
+            {
+                if (p.title) {
+                    <h2>{*p.title}</h2>
+                }
+            }
+            <ul class="task-list">
+                {
+                    for (const auto& t : p.items) {
+                        <task_item item={t} />
+                    }
+                }
+            </ul>
+        </div>
+    );
 }
 
 int main() {

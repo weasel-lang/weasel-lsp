@@ -18,3 +18,7 @@ target_link_libraries(weasel_tests PRIVATE weasel)
 target_include_directories(weasel_tests PRIVATE ${doctest_SOURCE_DIR})
 
 add_test(NAME weasel_tests COMMAND weasel_tests)
+
+if(WEASEL_BUILD_COMPILER)
+    add_subdirectory(compiler)
+endif()
