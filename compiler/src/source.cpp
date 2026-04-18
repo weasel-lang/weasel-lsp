@@ -36,6 +36,16 @@ size_t source_buffer::line_of(size_t offset) const {
     return static_cast<size_t>(it - line_starts.begin());
 }
 
+size_t source_buffer::column_of(size_t offset) const {
+    size_t line = line_of(offset);
+    size_t start = line == 0 ? 0 : line_starts[line - 1];
+    return offset - start;
+}
+
+source_position source_buffer::position_of(size_t offset) const {
+    return {line_of(offset), column_of(offset)};
+}
+
 source_buffer load_source(const std::string& filename) {
     std::ifstream in(filename, std::ios::binary);
     if (!in) {

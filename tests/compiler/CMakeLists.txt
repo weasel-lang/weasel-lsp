@@ -1,5 +1,9 @@
 add_executable(weasel_compiler_tests
     test_transpiler.cpp
+    test_position.cpp
+    test_component_info.cpp
+    test_boundary.cpp
+    test_diagnostic.cpp
 )
 
 target_link_libraries(weasel_compiler_tests PRIVATE weasel_compiler)

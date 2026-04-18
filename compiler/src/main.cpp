@@ -1,3 +1,4 @@
+#include "weasel/compiler/diagnostic.hpp"
 #include "weasel/compiler/source.hpp"
 #include "weasel/compiler/transpiler.hpp"
 #include <cstdlib>
@@ -53,6 +54,11 @@ int main(int argc, char** argv) {
     }
     try {
         weasel::compiler::transpile(buf.text, out);
+    } catch (const weasel::compiler::parse_error& e) {
+        auto pos = buf.position_of(e.diag.span.begin);
+        std::cerr << input << ":" << pos.line << ":" << (pos.column + 1)
+                  << ": error: " << e.diag.message << "\n";
+        return 1;
     } catch (const std::exception& e) {
         std::cerr << "weaselc: " << input << ": " << e.what() << "\n";
         return 1;

@@ -1,15 +1,20 @@
 #include "weasel/compiler/ccx_parser.hpp"
+#include "weasel/compiler/diagnostic.hpp"
 #include "weasel/compiler/scanner.hpp"
 #include <sstream>
-#include <stdexcept>
 
 namespace weasel::compiler {
 namespace {
 
 [[noreturn]] void fail(scanner& s, const std::string& msg) {
+    diagnostic d;
+    d.sev = severity::error;
+    d.span = {s.pos(), s.pos()};
     std::ostringstream o;
-    o << "weasel parse error at byte " << s.pos() << ": " << msg;
-    throw std::runtime_error(o.str());
+    o << "weasel parse error: " << msg;
+    d.message = o.str();
+    d.code = "weasel.parse";
+    throw parse_error(std::move(d));
 }
 
 void skip_ws(scanner& s) { s.read_whitespace(); }

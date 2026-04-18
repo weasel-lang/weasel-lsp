@@ -2,6 +2,7 @@
 #include "weasel/compiler/emitter.hpp"
 #include "weasel/compiler/ccx_parser.hpp"
 #include "weasel/compiler/scanner.hpp"
+#include "weasel/compiler/source.hpp"
 #include <ostream>
 
 namespace weasel::compiler {
@@ -22,8 +23,10 @@ enum class prev_tok {
 
 class driver {
   public:
-    driver(std::string_view src, std::ostream &out, const std::unordered_set<std::string> &components)
-        : s_(src), out_(&out), components_(components) {}
+    driver(std::string_view src, std::ostream &out,
+           const std::unordered_set<std::string> &components,
+           const transpile_options &opts)
+        : s_(src), out_(&out), components_(components), opts_(&opts) {}
 
     void run() {
         while (!s_.eof())
@@ -271,6 +274,8 @@ class driver {
         };
         ccx_node root = parse_element(s_, components_, smart_cap);
         emit(root, *out_);
+        if (opts_ && opts_->on_ccx_span)
+            opts_->on_ccx_span(ccx_start, s_.pos());
         // After emission, we're after a closed C++ expression.
         prev_ = prev_tok::rparen;
         // Line-preservation: pad output with newlines if the JSX source span
@@ -290,13 +295,54 @@ class driver {
     scanner s_;
     std::ostream *out_;
     const std::unordered_set<std::string> &components_;
+    const transpile_options *opts_;
     prev_tok prev_ = prev_tok::none;
 };
 
 } // namespace
 
-std::unordered_set<std::string> collect_components(std::string_view src) {
-    std::unordered_set<std::string> out;
+namespace {
+// Skip a balanced (...) starting at scanner position on '(' (consumed).
+// Returns the raw text between the parens (exclusive). Scanner advances past ')'.
+// If EOF is hit first, returns whatever was read; scanner is left at EOF.
+std::string capture_balanced_parens(scanner &s) {
+    // Precondition: s.peek() == '('
+    s.advance(); // consume '('
+    size_t begin = s.pos();
+    int depth = 1;
+    while (!s.eof() && depth > 0) {
+        char c = s.peek();
+        if (c == '/' && s.peek(1) == '/') {
+            s.read_line_comment();
+            continue;
+        }
+        if (c == '/' && s.peek(1) == '*') {
+            s.read_block_comment();
+            continue;
+        }
+        if (c == '"') { s.read_string_literal(); continue; }
+        if (c == '\'') { s.read_char_literal(); continue; }
+        if (c == 'R' && s.peek(1) == '"') { s.read_raw_string_literal(); continue; }
+        if (c == '(') { depth++; s.advance(); continue; }
+        if (c == ')') {
+            depth--;
+            if (depth == 0) {
+                size_t end = s.pos();
+                s.advance();
+                return std::string(s.text().substr(begin, end - begin));
+            }
+            s.advance();
+            continue;
+        }
+        s.advance();
+    }
+    return std::string(s.text().substr(begin, s.pos() - begin));
+}
+} // namespace
+
+std::vector<component_info> collect_component_infos(std::string_view src) {
+    std::vector<component_info> out;
+    source_buffer buf = make_source("", std::string(src));
     scanner s(src);
     while (!s.eof()) {
         char c = s.peek();
@@ -328,12 +374,21 @@ std::unordered_set<std::string> collect_components(std::string_view src) {
             auto id = s.read_identifier();
             if (id == "component") {
                 s.read_whitespace();
+                size_t name_offset = s.pos();
                 auto name = s.read_identifier();
                 if (!name.empty()) {
                     size_t save = s.pos();
                     s.read_whitespace();
                     if (s.peek() == '(') {
-                        out.insert(std::string(name));
+                        std::string params = capture_balanced_parens(s);
+                        auto pos = buf.position_of(name_offset);
+                        out.push_back(component_info{
+                            std::string(name),
+                            name_offset,
+                            pos.line,
+                            pos.column,
+                            std::move(params),
+                        });
                     } else {
                         s.set_pos(save);
                     }
@@ -350,9 +405,15 @@ std::unordered_set<std::string> collect_components(std::string_view src) {
     return out;
 }
 
-void transpile(std::string_view src, std::ostream &out, const transpile_options &) {
+std::unordered_set<std::string> collect_components(std::string_view src) {
+    std::unordered_set<std::string> out;
+    for (const auto &c : collect_component_infos(src)) out.insert(c.name);
+    return out;
+}
+
+void transpile(std::string_view src, std::ostream &out, const transpile_options &opts) {
     auto components = collect_components(src);
-    driver d(src, out, components);
+    driver d(src, out, components, opts);
     d.run();
 }
 
