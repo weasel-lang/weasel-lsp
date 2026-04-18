@@ -1,0 +1,2 @@
+add_executable(task_list_example task_list.cpp)
+target_link_libraries(task_list_example PRIVATE weasel)
