@@ -29,6 +29,8 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     name: build-${{ matrix.target }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +63,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout (for formula template)
         uses: actions/checkout@v4

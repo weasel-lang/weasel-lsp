@@ -1,4 +1,5 @@
 #include <doctest.h>
+#include <string>
 #include "weasel/compiler/boundary.hpp"
 
 using weasel::compiler::find_ccx_spans;
