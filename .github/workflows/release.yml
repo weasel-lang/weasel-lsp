@@ -20,9 +20,7 @@ jobs:
           - os: ubuntu-22.04-arm
             target: linux-arm64
             strip_cmd: strip
-          - os: macos-13
-            target: macos-x86_64
-            strip_cmd: strip -x
+          # macos-13 (x86_64) excluded: too slow on GitHub-hosted runners
           - os: macos-14
             target: macos-arm64
             strip_cmd: strip -x
@@ -90,14 +88,12 @@ jobs:
           VERSION_NUM=${VERSION#v}
 
           sha_macos_arm64=$(sha256sum dist/weasel-${VERSION}-macos-arm64.tar.gz | awk '{print $1}')
-          sha_macos_x86_64=$(sha256sum dist/weasel-${VERSION}-macos-x86_64.tar.gz | awk '{print $1}')
           sha_linux_arm64=$(sha256sum dist/weasel-${VERSION}-linux-arm64.tar.gz | awk '{print $1}')
           sha_linux_x86_64=$(sha256sum dist/weasel-${VERSION}-linux-x86_64.tar.gz | awk '{print $1}')
 
           sed -i \
             -e "s/version \".*\"/version \"${VERSION_NUM}\"/" \
             -e "s/PLACEHOLDER_MACOS_ARM64/${sha_macos_arm64}/" \
-            -e "s/PLACEHOLDER_MACOS_X86_64/${sha_macos_x86_64}/" \
             -e "s/PLACEHOLDER_LINUX_ARM64/${sha_linux_arm64}/" \
             -e "s/PLACEHOLDER_LINUX_X86_64/${sha_linux_x86_64}/" \
             packaging/homebrew/weaselc.rb

@@ -11,13 +11,10 @@ class Weaselc < Formula
   version "0.1.0"
   license "MIT"
 
-  on_macos do
-    if Hardware::CPU.arm?
+  on_arm do
+    on_macos do
       url "https://github.com/weasel-lang/language-services-weasel/releases/download/v#{version}/weasel-v#{version}-macos-arm64.tar.gz"
       sha256 "PLACEHOLDER_MACOS_ARM64"
-    else
-      url "https://github.com/weasel-lang/language-services-weasel/releases/download/v#{version}/weasel-v#{version}-macos-x86_64.tar.gz"
-      sha256 "PLACEHOLDER_MACOS_X86_64"
     end
   end
 
