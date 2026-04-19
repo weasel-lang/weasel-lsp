@@ -25,3 +25,5 @@ target_compile_features(weasel_lsp_core PUBLIC cxx_std_20)
 
 add_executable(weasel_lsp_server main.cpp)
 target_link_libraries(weasel_lsp_server PRIVATE weasel_lsp_core)
+
+install(TARGETS weasel_lsp_server RUNTIME DESTINATION bin)

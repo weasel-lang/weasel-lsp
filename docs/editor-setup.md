@@ -8,7 +8,27 @@ Weasel ships `weasel_lsp_server`, an editor-agnostic LSP. Features:
 - **On save**, the corresponding `.cc` file is written next to the `.weasel` (commit both)
 - **C++ intelligence** via a clangd subprocess: diagnostics, go-to-def for C++ symbols, hovers, C++ completion outside CCX regions. Results are remapped from the generated `.cc` back to `.weasel` coordinates.
 
-## Build
+## Install
+
+### Download pre-built binary (recommended)
+
+Pre-built binaries are available on the [GitHub Releases](https://github.com/weasel-lang/language-services-weasel/releases) page for macOS (arm64, x86_64) and Linux (x86_64, arm64).
+
+Download the tarball for your platform:
+
+```
+weasel_lsp_server-{version}-{os}-{arch}.tar.gz
+```
+
+where `{os}` is `macos` or `linux` and `{arch}` is `arm64` or `x86_64`.
+
+**Editor extensions** should download the matching artifact at bootstrap time and verify the version matches what they expect. The URL pattern is:
+
+```
+https://github.com/weasel-lang/language-services-weasel/releases/download/{version}/weasel_lsp_server-{version}-{os}-{arch}.tar.gz
+```
+
+### Build from source
 
 ```
 cmake -B build

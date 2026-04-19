@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: linux-x86_64
+            strip_cmd: strip
+          - os: ubuntu-22.04-arm
+            target: linux-arm64
+            strip_cmd: strip
+          - os: macos-13
+            target: macos-x86_64
+            strip_cmd: strip -x
+          - os: macos-14
+            target: macos-arm64
+            strip_cmd: strip -x
+
+    runs-on: ${{ matrix.os }}
+    name: build-${{ matrix.target }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DWEASEL_BUILD_TESTS=OFF -DWEASEL_BUILD_EXAMPLES=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          VERSION=${{ github.ref_name }}
+          TARGET=${{ matrix.target }}
+          ${{ matrix.strip_cmd }} build/compiler/weaselc
+          ${{ matrix.strip_cmd }} build/lsp/weasel_lsp_server
+          mkdir -p dist staging
+          cp build/compiler/weaselc build/lsp/weasel_lsp_server staging/
+          tar czf dist/weasel-${VERSION}-${TARGET}.tar.gz -C staging weaselc weasel_lsp_server
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout (for formula template)
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+          generate_release_notes: true
+
+      - name: Update Homebrew formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION_NUM=${VERSION#v}
+
+          sha_macos_arm64=$(sha256sum dist/weasel-${VERSION}-macos-arm64.tar.gz | awk '{print $1}')
+          sha_macos_x86_64=$(sha256sum dist/weasel-${VERSION}-macos-x86_64.tar.gz | awk '{print $1}')
+          sha_linux_arm64=$(sha256sum dist/weasel-${VERSION}-linux-arm64.tar.gz | awk '{print $1}')
+          sha_linux_x86_64=$(sha256sum dist/weasel-${VERSION}-linux-x86_64.tar.gz | awk '{print $1}')
+
+          sed -i \
+            -e "s/version \".*\"/version \"${VERSION_NUM}\"/" \
+            -e "s/PLACEHOLDER_MACOS_ARM64/${sha_macos_arm64}/" \
+            -e "s/PLACEHOLDER_MACOS_X86_64/${sha_macos_x86_64}/" \
+            -e "s/PLACEHOLDER_LINUX_ARM64/${sha_linux_arm64}/" \
+            -e "s/PLACEHOLDER_LINUX_X86_64/${sha_linux_x86_64}/" \
+            packaging/homebrew/weaselc.rb
+
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/weasel-lang/homebrew-weasel.git tap
+          mkdir -p tap/Formula
+          cp packaging/homebrew/weaselc.rb tap/Formula/weaselc.rb
+
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/weaselc.rb
+          git commit -m "weaselc ${VERSION}"
+          git push

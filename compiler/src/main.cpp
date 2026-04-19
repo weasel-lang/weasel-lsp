@@ -1,6 +1,7 @@
 #include "weasel/compiler/diagnostic.hpp"
 #include "weasel/compiler/source.hpp"
 #include "weasel/compiler/transpiler.hpp"
+#include "weasel/compiler/version.hpp"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -17,7 +18,10 @@ int main(int argc, char** argv) {
     std::string output;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
-        if (a == "-o" && i + 1 < argc) {
+        if (a == "--version") {
+            std::cout << "weaselc " << WEASEL_VERSION << "\n";
+            return 0;
+        } else if (a == "-o" && i + 1 < argc) {
             output = argv[++i];
         } else if (a == "--" && i + 1 < argc) {
             input = argv[++i];
