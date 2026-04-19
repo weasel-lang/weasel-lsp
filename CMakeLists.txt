@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+configure_file(.clangd.in .clangd @ONLY)
+file(CREATE_LINK ${CMAKE_BINARY_DIR}/compile_commands.json
+    ${CMAKE_SOURCE_DIR}/compile_commands.json SYMBOLIC)
+
 option(WEASEL_BUILD_TESTS    "Build the weasel test suite" ON)
 option(WEASEL_BUILD_EXAMPLES "Build the weasel examples"  ON)
 option(WEASEL_BUILD_COMPILER "Build the weasel compiler"  ON)

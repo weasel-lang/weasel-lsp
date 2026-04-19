@@ -1,0 +1,3 @@
+CompileFlags:
+  CompilationDatabase: build
+  Add: [-I@CMAKE_SOURCE_DIR@/runtime/include, -std=c++20]
