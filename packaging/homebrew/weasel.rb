@@ -1,12 +1,13 @@
-# Formula for the weaselc transpiler and weasel_lsp_server.
+# Formula for the weasel developer package:
+#   weaselc + weasel_lsp_server binaries, libweasel.a, libweasel.dylib/.so, and headers.
 # Lives in a Homebrew tap: https://github.com/weasel-lang/homebrew-weasel
-# Install: brew install weasel-lang/weasel/weaselc
+# Install: brew install weasel-lang/weasel
 #
 # The sha256 fields and version are updated automatically by the release workflow.
 # DO NOT edit manually — run `scripts/update-homebrew-formula.sh <version>` instead.
 
-class Weaselc < Formula
-  desc "Transpiler and LSP server for CCX (C++ Components eXtended) — JSX-like templates in C++"
+class Weasel < Formula
+  desc "C++ HTML generation library with CCX transpiler and LSP server (developer package)"
   homepage "https://github.com/weasel-lang/language-services-weasel"
   version "0.1.0"
   license "MIT"
@@ -29,12 +30,21 @@ class Weaselc < Formula
   end
 
   def install
-    bin.install "weaselc"
-    bin.install "weasel_lsp_server"
+    bin.install "bin/weaselc"
+    bin.install "bin/weasel_lsp_server"
+    lib.install "lib/libweasel.a"
+    on_macos do
+      lib.install "lib/libweasel.dylib"
+    end
+    on_linux do
+      lib.install "lib/libweasel.so"
+    end
+    include.install "include/weasel"
   end
 
   test do
     system "#{bin}/weaselc", "--version"
-    assert_predicate bin/"weasel_lsp_server", :executable?
+    assert_predicate lib/"libweasel.a", :exist?
+    assert_predicate include/"weasel/weasel.hpp", :exist?
   end
 end
