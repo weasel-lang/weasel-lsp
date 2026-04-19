@@ -85,19 +85,21 @@ The compiler transpiles `.weasel` source files (C++ with embedded CCX markup) in
 
 ## LSP Server (`lsp/`)
 
-`build/lsp/weasel_lsp_server` — editor-agnostic LSP over stdio. v0.5 features:
+`build/lsp/weasel_lsp_server` — editor-agnostic LSP over stdio. Features:
 - Parse diagnostics for CCX errors (surfaces `parse_error` from the compiler as LSP `Diagnostic`)
 - Go-to-definition for `<ComponentName />` → `component ComponentName(...)` declaration (uses `collect_component_infos`)
 - Completion of HTML tags, known components, and control-flow keywords inside CCX regions (uses `is_position_in_ccx`)
 - On `didSave`, writes the `.cc` next to the `.weasel` — commit both, templ-style
+- **C++ intelligence** via a clangd subprocess: diagnostics, go-to-def, hovers, and completion for positions outside CCX. Results are remapped from the generated `.cc` back to `.weasel` coordinates using the compiler's `line_map`. Diagnostics in `cpp_passthrough` spans keep their column; diagnostics in `ccx_region` spans collapse to the source line and gain a `[in CCX]` prefix.
 
-C++ intelligence on the generated `.cc` is not proxied in v0.5; users rely on their own clangd setup. v1 will proxy to clangd via a subprocess.
+Clangd is located via `WEASEL_CLANGD_PATH` (env) or `$PATH` on `initialize`. Opt out with `WEASEL_LSP_NO_CLANGD=1` — the server falls back to the non-proxied feature set.
 
 **Layout** (`lsp/include/weasel/lsp/`):
 - `jsonrpc.hpp` — Content-Length framing, JSON message read/write
-- `document_store.hpp` — per-URI cache: text, components, CCX spans, parse diagnostics
-- `server.hpp` — LSP method dispatch
+- `document_store.hpp` — per-URI cache: text, components, CCX spans, parse diagnostics, generated `cc_text`, `line_map`
+- `server.hpp` — LSP method dispatch + clangd proxy integration
 - `features.hpp` — `build_completion`, `build_definition`, `build_diagnostics_payload`
+- `clangd_proxy.hpp` — spawn/lifecycle for the clangd subprocess, id-routed request/response + notification relay
 
 Disable with `-DWEASEL_BUILD_LSP=OFF`. See `docs/editor-setup.md` for neovim/helix config.
 
@@ -108,7 +110,8 @@ Tests use [Doctest](https://github.com/doctest/doctest) (auto-fetched by CMake):
 - `tests/test_factory.cpp` — factory function output
 - `tests/test_renderer.cpp` — HTML output correctness (escaping, void elements, nesting)
 - `tests/test_context.cpp` — thread-local context behavior
-- `tests/compiler/test_position.cpp`, `test_component_info.cpp`, `test_boundary.cpp`, `test_diagnostic.cpp` — compiler library internals used by the LSP
+- `tests/compiler/test_position.cpp`, `test_component_info.cpp`, `test_boundary.cpp`, `test_diagnostic.cpp`, `test_line_map.cpp` — compiler library internals used by the LSP
 - `tests/lsp/test_lsp_server.cpp` — end-to-end LSP over stringstreams (initialize, didOpen, diagnostics, definition, completion)
+- `tests/lsp/test_clangd_proxy.cpp` + `tests/lsp/mock_clangd.cpp` — clangd proxy round-trip: scripted mock clangd emits a diagnostic, asserts it surfaces under the `.weasel` URI with remapped coordinates
 
 To run a single test binary directly: `./build/tests/weasel_tests`

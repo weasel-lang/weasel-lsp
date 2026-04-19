@@ -3,10 +3,38 @@
 #include "weasel/compiler/ccx_parser.hpp"
 #include "weasel/compiler/scanner.hpp"
 #include "weasel/compiler/source.hpp"
+#include <algorithm>
 #include <ostream>
+#include <streambuf>
 
 namespace weasel::compiler {
 namespace {
+
+// Wraps a destination streambuf and counts the current 1-based line number
+// based on '\n' characters written through it.
+class counting_streambuf : public std::streambuf {
+  public:
+    explicit counting_streambuf(std::streambuf* dest) : dest_(dest) {}
+    size_t line() const { return line_; }
+
+  protected:
+    int_type overflow(int_type ch) override {
+        if (ch == traits_type::eof()) return traits_type::not_eof(ch);
+        char c = static_cast<char>(ch);
+        if (c == '\n') ++line_;
+        return dest_->sputc(c) == traits_type::eof() ? traits_type::eof() : ch;
+    }
+    std::streamsize xsputn(const char* s, std::streamsize n) override {
+        for (std::streamsize i = 0; i < n; ++i) {
+            if (s[i] == '\n') ++line_;
+        }
+        return dest_->sputn(s, n);
+    }
+
+  private:
+    std::streambuf* dest_;
+    size_t line_ = 1;
+};
 
 enum class prev_tok {
     none,
@@ -23,14 +51,34 @@ enum class prev_tok {
 
 class driver {
   public:
-    driver(std::string_view src, std::ostream &out,
+    driver(std::string_view src, std::ostream &out, counting_streambuf *counter,
            const std::unordered_set<std::string> &components,
-           const transpile_options &opts)
-        : s_(src), out_(&out), components_(components), opts_(&opts) {}
+           const transpile_options &opts,
+           std::vector<line_span> *line_map, const source_buffer *buf)
+        : s_(src), out_(&out), counter_(counter), components_(components),
+          opts_(&opts), line_map_(line_map), buf_(buf) {}
 
     void run() {
         while (!s_.eof())
             step();
+        // Emit a trailing cpp_passthrough span covering anything after the
+        // last CCX region (or the whole file if there were no CCX regions).
+        if (line_map_ && counter_ && buf_) {
+            size_t end_cc = counter_->line();
+            size_t end_weasel = buf_->line_of(s_.pos() > 0 ? s_.pos() - 1 : 0);
+            if (end_cc >= cc_line_cursor_) {
+                line_span span{
+                    weasel_line_cursor_,
+                    std::max(weasel_line_cursor_, end_weasel),
+                    cc_line_cursor_,
+                    end_cc,
+                    span_kind::cpp_passthrough,
+                };
+                // Avoid pushing a zero-width span past EOF on empty input.
+                if (span.cc_line_end >= span.cc_line_begin)
+                    line_map_->push_back(span);
+            }
+        }
     }
 
     // Capture a `{...}` expression: precondition: s_.peek() == '{'? No —
@@ -251,6 +299,24 @@ class driver {
 
     void parse_and_emit_ccx() {
         size_t ccx_start = s_.pos();
+        size_t ccx_weasel_line_begin = buf_ ? buf_->line_of(ccx_start) : 0;
+        size_t ccx_cc_line_begin = counter_ ? counter_->line() : 0;
+        if (line_map_ && counter_ && buf_) {
+            // Flush any pending cpp_passthrough span covering cc lines since
+            // the last boundary up to (but not including) the CCX start.
+            if (ccx_cc_line_begin > cc_line_cursor_) {
+                size_t weasel_end = ccx_weasel_line_begin > weasel_line_cursor_
+                                        ? ccx_weasel_line_begin - 1
+                                        : weasel_line_cursor_;
+                line_map_->push_back(line_span{
+                    weasel_line_cursor_,
+                    weasel_end,
+                    cc_line_cursor_,
+                    ccx_cc_line_begin - 1,
+                    span_kind::cpp_passthrough,
+                });
+            }
+        }
         brace_capture_fn cap_brace = [this](std::ostream &o) { this->capture_brace(o); };
         // Attribute values and control-flow heads are captured via parenthesis/brace.
         // ccx_parser uses the `cap` callback with the convention:
@@ -290,12 +356,32 @@ class driver {
         // the emitter inserted newlines itself (it does not currently).
         for (size_t i = 0; i < consumed_lines; ++i)
             *out_ << '\n';
+
+        if (line_map_ && counter_ && buf_) {
+            size_t ccx_cc_line_end = counter_->line();
+            size_t last_char_pos = s_.pos() > ccx_start ? s_.pos() - 1 : ccx_start;
+            size_t ccx_weasel_line_end = buf_->line_of(last_char_pos);
+            line_map_->push_back(line_span{
+                ccx_weasel_line_begin,
+                ccx_weasel_line_end,
+                ccx_cc_line_begin,
+                ccx_cc_line_end,
+                span_kind::ccx_region,
+            });
+            cc_line_cursor_ = ccx_cc_line_end + 1;
+            weasel_line_cursor_ = ccx_weasel_line_end + 1;
+        }
     }
 
     scanner s_;
     std::ostream *out_;
+    counting_streambuf *counter_;
     const std::unordered_set<std::string> &components_;
     const transpile_options *opts_;
+    std::vector<line_span> *line_map_;
+    const source_buffer *buf_;
+    size_t cc_line_cursor_ = 1;
+    size_t weasel_line_cursor_ = 1;
     prev_tok prev_ = prev_tok::none;
 };
 
@@ -413,8 +499,44 @@ std::unordered_set<std::string> collect_components(std::string_view src) {
 
 void transpile(std::string_view src, std::ostream &out, const transpile_options &opts) {
     auto components = collect_components(src);
-    driver d(src, out, components, opts);
+    driver d(src, out, nullptr, components, opts, nullptr, nullptr);
     d.run();
+}
+
+transpile_result transpile_with_map(std::string_view src, std::ostream &out,
+                                    const transpile_options &opts) {
+    transpile_result r;
+    r.components = collect_component_infos(src);
+    source_buffer buf = make_source("", std::string(src));
+    auto components = collect_components(src);
+
+    counting_streambuf counter(out.rdbuf());
+    std::ostream counted(&counter);
+    try {
+        driver d(src, counted, &counter, components, opts, &r.line_map, &buf);
+        d.run();
+        counted.flush();
+        r.ok = true;
+    } catch (const parse_error &e) {
+        counted.flush();
+        r.ok = false;
+        r.diagnostics.push_back(e.diag);
+    }
+    return r;
+}
+
+cc_to_weasel_result cc_line_to_weasel(const std::vector<line_span> &map, size_t cc_line) {
+    // Binary search for the span whose [cc_line_begin, cc_line_end] covers cc_line.
+    auto it = std::upper_bound(map.begin(), map.end(), cc_line,
+                               [](size_t line, const line_span &sp) { return line < sp.cc_line_begin; });
+    if (it == map.begin()) return {0, nullptr};
+    --it;
+    if (cc_line > it->cc_line_end) return {0, nullptr};
+    size_t weasel_line = it->kind == span_kind::ccx_region
+                             ? it->weasel_line_begin
+                             : it->weasel_line_begin + (cc_line - it->cc_line_begin);
+    if (weasel_line > it->weasel_line_end) weasel_line = it->weasel_line_end;
+    return {weasel_line, &*it};
 }
 
 } // namespace weasel::compiler

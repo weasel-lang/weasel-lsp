@@ -4,6 +4,7 @@ add_executable(weasel_compiler_tests
     test_component_info.cpp
     test_boundary.cpp
     test_diagnostic.cpp
+    test_line_map.cpp
 )
 
 target_link_libraries(weasel_compiler_tests PRIVATE weasel_compiler)

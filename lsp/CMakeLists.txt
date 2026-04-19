@@ -15,9 +15,12 @@ add_library(weasel_lsp_core STATIC
     src/completion.cpp
     src/definition.cpp
     src/diagnostics.cpp
+    src/clangd_proxy.cpp
 )
 target_include_directories(weasel_lsp_core PUBLIC include/)
-target_link_libraries(weasel_lsp_core PUBLIC weasel_compiler nlohmann_json::nlohmann_json)
+
+find_package(Threads REQUIRED)
+target_link_libraries(weasel_lsp_core PUBLIC weasel_compiler nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_features(weasel_lsp_core PUBLIC cxx_std_20)
 
 add_executable(weasel_lsp_server main.cpp)

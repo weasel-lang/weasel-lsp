@@ -23,6 +23,12 @@ struct doc_state {
     // Parse diagnostic if transpile failed. Empty if it succeeded.
     std::vector<weasel::compiler::diagnostic> diagnostics;
 
+    // Transpiled .cc text and the line map from the last successful transpile.
+    // If the transpile failed the cc_text may be partial; line_map corresponds
+    // to whatever was produced before the parse_error.
+    std::string cc_text;
+    std::vector<weasel::compiler::line_span> line_map;
+
     // Byte offset <-> (line, column) mapping is via `buffer`.
     bool position_in_ccx(size_t offset) const;
 };

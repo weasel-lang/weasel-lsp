@@ -1,22 +1,11 @@
 #include "weasel/lsp/document_store.hpp"
 #include "weasel/compiler/boundary.hpp"
-#include "weasel/compiler/diagnostic.hpp"
 #include "weasel/compiler/transpiler.hpp"
 #include <cctype>
 #include <cstdio>
-#include <ostream>
 #include <sstream>
-#include <streambuf>
 
 namespace weasel::lsp {
-
-namespace {
-class null_streambuf : public std::streambuf {
-  protected:
-    int overflow(int c) override { return c; }
-    std::streamsize xsputn(const char*, std::streamsize n) override { return n; }
-};
-} // namespace
 
 bool doc_state::position_in_ccx(size_t offset) const {
     for (const auto& s : ccx_spans) {
@@ -27,26 +16,22 @@ bool doc_state::position_in_ccx(size_t offset) const {
 
 void document_store::refresh(doc_state& d) {
     d.buffer = weasel::compiler::make_source(d.uri, d.text);
-    d.components = weasel::compiler::collect_component_infos(d.text);
     d.ccx_spans.clear();
     d.diagnostics.clear();
+    d.cc_text.clear();
+    d.line_map.clear();
 
-    null_streambuf nb;
-    std::ostream null_out(&nb);
+    std::ostringstream cc_out;
     weasel::compiler::transpile_options opts;
     opts.on_ccx_span = [&](size_t b, size_t e) {
         d.ccx_spans.push_back({b, e});
     };
-    try {
-        weasel::compiler::transpile(d.text, null_out, opts);
-    } catch (const weasel::compiler::parse_error& e) {
-        d.diagnostics.push_back(e.diag);
-    } catch (const std::exception& e) {
-        weasel::compiler::diagnostic fallback;
-        fallback.sev = weasel::compiler::severity::error;
-        fallback.message = e.what();
-        fallback.code = "weasel.internal";
-        d.diagnostics.push_back(std::move(fallback));
+    auto result = weasel::compiler::transpile_with_map(d.text, cc_out, opts);
+    d.cc_text = cc_out.str();
+    d.line_map = std::move(result.line_map);
+    d.components = std::move(result.components);
+    if (!result.ok) {
+        d.diagnostics = std::move(result.diagnostics);
     }
 }
 

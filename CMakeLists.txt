@@ -5,14 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(weasel STATIC src/renderer.cpp)
-target_include_directories(weasel PUBLIC include/)
-target_compile_features(weasel PUBLIC cxx_std_20)
-
 option(WEASEL_BUILD_TESTS    "Build the weasel test suite" ON)
 option(WEASEL_BUILD_EXAMPLES "Build the weasel examples"  ON)
 option(WEASEL_BUILD_COMPILER "Build the weasel compiler"  ON)
 option(WEASEL_BUILD_LSP      "Build the weasel LSP server" ON)
+
+add_subdirectory(runtime)
 
 if(WEASEL_BUILD_COMPILER)
     add_subdirectory(compiler)
