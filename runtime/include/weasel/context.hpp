@@ -4,10 +4,11 @@
 
 namespace weasel {
 
-template<typename T>
+template <typename T>
 class context {
     inline static thread_local std::vector<const T*> stack_;
-public:
+
+   public:
     struct provider {
         explicit provider(const T& v) { stack_.push_back(&v); }
         ~provider() { stack_.pop_back(); }
@@ -22,4 +23,4 @@ public:
     }
 };
 
-} // namespace weasel
+}  // namespace weasel

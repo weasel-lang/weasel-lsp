@@ -1,11 +1,11 @@
 #include "weasel/compiler/transpiler.hpp"
-#include "weasel/compiler/emitter.hpp"
-#include "weasel/compiler/ccx_parser.hpp"
-#include "weasel/compiler/scanner.hpp"
-#include "weasel/compiler/source.hpp"
 #include <algorithm>
 #include <ostream>
 #include <streambuf>
+#include "weasel/compiler/ccx_parser.hpp"
+#include "weasel/compiler/emitter.hpp"
+#include "weasel/compiler/scanner.hpp"
+#include "weasel/compiler/source.hpp"
 
 namespace weasel::compiler {
 namespace {
@@ -13,25 +13,28 @@ namespace {
 // Wraps a destination streambuf and counts the current 1-based line number
 // based on '\n' characters written through it.
 class counting_streambuf : public std::streambuf {
-  public:
+   public:
     explicit counting_streambuf(std::streambuf* dest) : dest_(dest) {}
     size_t line() const { return line_; }
 
-  protected:
+   protected:
     int_type overflow(int_type ch) override {
-        if (ch == traits_type::eof()) return traits_type::not_eof(ch);
+        if (ch == traits_type::eof())
+            return traits_type::not_eof(ch);
         char c = static_cast<char>(ch);
-        if (c == '\n') ++line_;
+        if (c == '\n')
+            ++line_;
         return dest_->sputc(c) == traits_type::eof() ? traits_type::eof() : ch;
     }
     std::streamsize xsputn(const char* s, std::streamsize n) override {
         for (std::streamsize i = 0; i < n; ++i) {
-            if (s[i] == '\n') ++line_;
+            if (s[i] == '\n')
+                ++line_;
         }
         return dest_->sputn(s, n);
     }
 
-  private:
+   private:
     std::streambuf* dest_;
     size_t line_ = 1;
 };
@@ -50,13 +53,15 @@ enum class prev_tok {
 };
 
 class driver {
-  public:
-    driver(std::string_view src, std::ostream &out, counting_streambuf *counter,
-           const std::unordered_set<std::string> &components,
-           const transpile_options &opts,
-           std::vector<line_span> *line_map, const source_buffer *buf)
-        : s_(src), out_(&out), counter_(counter), components_(components),
-          opts_(&opts), line_map_(line_map), buf_(buf) {}
+   public:
+    driver(std::string_view src,
+           std::ostream& out,
+           counting_streambuf* counter,
+           const std::unordered_set<std::string>& components,
+           const transpile_options& opts,
+           std::vector<line_span>* line_map,
+           const source_buffer* buf)
+        : s_(src), out_(&out), counter_(counter), components_(components), opts_(&opts), line_map_(line_map), buf_(buf) {}
 
     void run() {
         while (!s_.eof())
@@ -68,11 +73,7 @@ class driver {
             size_t end_weasel = buf_->line_of(s_.pos() > 0 ? s_.pos() - 1 : 0);
             if (end_cc >= cc_line_cursor_) {
                 line_span span{
-                    weasel_line_cursor_,
-                    std::max(weasel_line_cursor_, end_weasel),
-                    cc_line_cursor_,
-                    end_cc,
-                    span_kind::cpp_passthrough,
+                    weasel_line_cursor_, std::max(weasel_line_cursor_, end_weasel), cc_line_cursor_, end_cc, span_kind::cpp_passthrough,
                 };
                 // Avoid pushing a zero-width span past EOF on empty input.
                 if (span.cc_line_end >= span.cc_line_begin)
@@ -84,12 +85,12 @@ class driver {
     // Capture a `{...}` expression: precondition: s_.peek() == '{'? No —
     // the caller has already advanced past the opening '{'. We read until
     // the matching '}' at depth 0, writing transformed C++ to `out_capture`.
-    void capture_brace(std::ostream &out_capture) {
+    void capture_brace(std::ostream& out_capture) {
         int depth = 1;
-        std::ostream *saved = out_;
+        std::ostream* saved = out_;
         prev_tok saved_prev = prev_;
         out_ = &out_capture;
-        prev_ = prev_tok::punct_expr_start; // we're just past '{'
+        prev_ = prev_tok::punct_expr_start;  // we're just past '{'
         while (!s_.eof() && depth > 0) {
             char c = s_.peek();
             if (c == '{') {
@@ -118,9 +119,9 @@ class driver {
 
     // Capture balanced parens. Precondition: caller has advanced past '('.
     // Writes inner content transformed to `out_capture`, advances past ')'.
-    void capture_paren(std::ostream &out_capture) {
+    void capture_paren(std::ostream& out_capture) {
         int depth = 1;
-        std::ostream *saved = out_;
+        std::ostream* saved = out_;
         prev_tok saved_prev = prev_;
         out_ = &out_capture;
         prev_ = prev_tok::punct_expr_start;
@@ -150,7 +151,7 @@ class driver {
         prev_ = saved_prev;
     }
 
-  private:
+   private:
     void step() {
         if (should_enter_ccx()) {
             parse_and_emit_ccx();
@@ -241,40 +242,40 @@ class driver {
 
     void update_prev_from_char(char c) {
         switch (c) {
-        case ';':
-        case '(':
-        case ',':
-        case '{':
-        case '=':
-        case '?':
-        case ':':
-        case '+':
-        case '-':
-        case '*':
-        case '/':
-        case '%':
-        case '!':
-        case '&':
-        case '|':
-        case '^':
-        case '~':
-        case '<':
-            prev_ = prev_tok::punct_expr_start;
-            break;
-        case ')':
-            prev_ = prev_tok::rparen;
-            break;
-        case ']':
-            prev_ = prev_tok::rbracket;
-            break;
-        case '}':
-            prev_ = prev_tok::rbrace;
-            break;
-        case '>':
-            prev_ = prev_tok::rangle;
-            break;
-        default:
-            break;
+            case ';':
+            case '(':
+            case ',':
+            case '{':
+            case '=':
+            case '?':
+            case ':':
+            case '+':
+            case '-':
+            case '*':
+            case '/':
+            case '%':
+            case '!':
+            case '&':
+            case '|':
+            case '^':
+            case '~':
+            case '<':
+                prev_ = prev_tok::punct_expr_start;
+                break;
+            case ')':
+                prev_ = prev_tok::rparen;
+                break;
+            case ']':
+                prev_ = prev_tok::rbracket;
+                break;
+            case '}':
+                prev_ = prev_tok::rbrace;
+                break;
+            case '>':
+                prev_ = prev_tok::rangle;
+                break;
+            default:
+                break;
         }
     }
 
@@ -287,13 +288,13 @@ class driver {
         if (!scanner::is_ident_start(next))
             return false;
         switch (prev_) {
-        case prev_tok::kw_return_like:
-        case prev_tok::punct_expr_start:
-        case prev_tok::rbrace:
-        case prev_tok::none:
-            return true;
-        default:
-            return false;
+            case prev_tok::kw_return_like:
+            case prev_tok::punct_expr_start:
+            case prev_tok::rbrace:
+            case prev_tok::none:
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -305,9 +306,7 @@ class driver {
             // Flush any pending cpp_passthrough span covering cc lines since
             // the last boundary up to (but not including) the CCX start.
             if (ccx_cc_line_begin > cc_line_cursor_) {
-                size_t weasel_end = ccx_weasel_line_begin > weasel_line_cursor_
-                                        ? ccx_weasel_line_begin - 1
-                                        : weasel_line_cursor_;
+                size_t weasel_end = ccx_weasel_line_begin > weasel_line_cursor_ ? ccx_weasel_line_begin - 1 : weasel_line_cursor_;
                 line_map_->push_back(line_span{
                     weasel_line_cursor_,
                     weasel_end,
@@ -317,9 +316,11 @@ class driver {
                 });
             }
         }
-        brace_capture_fn cap = [this](std::ostream &o, capture_kind k) {
-            if (k == capture_kind::paren) this->capture_paren(o);
-            else                          this->capture_brace(o);
+        brace_capture_fn cap = [this](std::ostream& o, capture_kind k) {
+            if (k == capture_kind::paren)
+                this->capture_paren(o);
+            else
+                this->capture_brace(o);
         };
         ccx_node root = parse_element(s_, components_, cap, buf_);
         size_t cc_line_before_emit = counter_ ? counter_->line() : 0;
@@ -359,26 +360,26 @@ class driver {
     }
 
     scanner s_;
-    std::ostream *out_;
-    counting_streambuf *counter_;
-    const std::unordered_set<std::string> &components_;
-    const transpile_options *opts_;
-    std::vector<line_span> *line_map_;
-    const source_buffer *buf_;
+    std::ostream* out_;
+    counting_streambuf* counter_;
+    const std::unordered_set<std::string>& components_;
+    const transpile_options* opts_;
+    std::vector<line_span>* line_map_;
+    const source_buffer* buf_;
     size_t cc_line_cursor_ = 1;
     size_t weasel_line_cursor_ = 1;
     prev_tok prev_ = prev_tok::none;
 };
 
-} // namespace
+}  // namespace
 
 namespace {
 // Skip a balanced (...) starting at scanner position on '(' (consumed).
 // Returns the raw text between the parens (exclusive). Scanner advances past ')'.
 // If EOF is hit first, returns whatever was read; scanner is left at EOF.
-std::string capture_balanced_parens(scanner &s) {
+std::string capture_balanced_parens(scanner& s) {
     // Precondition: s.peek() == '('
-    s.advance(); // consume '('
+    s.advance();  // consume '('
     size_t begin = s.pos();
     int depth = 1;
     while (!s.eof() && depth > 0) {
@@ -391,10 +392,23 @@ std::string capture_balanced_parens(scanner &s) {
             s.read_block_comment();
             continue;
         }
-        if (c == '"') { s.read_string_literal(); continue; }
-        if (c == '\'') { s.read_char_literal(); continue; }
-        if (c == 'R' && s.peek(1) == '"') { s.read_raw_string_literal(); continue; }
-        if (c == '(') { depth++; s.advance(); continue; }
+        if (c == '"') {
+            s.read_string_literal();
+            continue;
+        }
+        if (c == '\'') {
+            s.read_char_literal();
+            continue;
+        }
+        if (c == 'R' && s.peek(1) == '"') {
+            s.read_raw_string_literal();
+            continue;
+        }
+        if (c == '(') {
+            depth++;
+            s.advance();
+            continue;
+        }
         if (c == ')') {
             depth--;
             if (depth == 0) {
@@ -409,7 +423,7 @@ std::string capture_balanced_parens(scanner &s) {
     }
     return std::string(s.text().substr(begin, s.pos() - begin));
 }
-} // namespace
+}  // namespace
 
 std::vector<component_info> collect_component_infos(std::string_view src) {
     std::vector<component_info> out;
@@ -478,18 +492,18 @@ std::vector<component_info> collect_component_infos(std::string_view src) {
 
 std::unordered_set<std::string> collect_components(std::string_view src) {
     std::unordered_set<std::string> out;
-    for (const auto &c : collect_component_infos(src)) out.insert(c.name);
+    for (const auto& c : collect_component_infos(src))
+        out.insert(c.name);
     return out;
 }
 
-void transpile(std::string_view src, std::ostream &out, const transpile_options &opts) {
+void transpile(std::string_view src, std::ostream& out, const transpile_options& opts) {
     auto components = collect_components(src);
     driver d(src, out, nullptr, components, opts, nullptr, nullptr);
     d.run();
 }
 
-transpile_result transpile_with_map(std::string_view src, std::ostream &out,
-                                    const transpile_options &opts) {
+transpile_result transpile_with_map(std::string_view src, std::ostream& out, const transpile_options& opts) {
     transpile_result r;
     r.components = collect_component_infos(src);
     source_buffer buf = make_source("", std::string(src));
@@ -502,7 +516,7 @@ transpile_result transpile_with_map(std::string_view src, std::ostream &out,
         d.run();
         counted.flush();
         r.ok = true;
-    } catch (const parse_error &e) {
+    } catch (const parse_error& e) {
         counted.flush();
         r.ok = false;
         r.diagnostics.push_back(e.diag);
@@ -510,18 +524,18 @@ transpile_result transpile_with_map(std::string_view src, std::ostream &out,
     return r;
 }
 
-cc_to_weasel_result cc_line_to_weasel(const std::vector<line_span> &map, size_t cc_line) {
+cc_to_weasel_result cc_line_to_weasel(const std::vector<line_span>& map, size_t cc_line) {
     // Binary search for the span whose [cc_line_begin, cc_line_end] covers cc_line.
-    auto it = std::upper_bound(map.begin(), map.end(), cc_line,
-                               [](size_t line, const line_span &sp) { return line < sp.cc_line_begin; });
-    if (it == map.begin()) return {0, nullptr};
+    auto it = std::upper_bound(map.begin(), map.end(), cc_line, [](size_t line, const line_span& sp) { return line < sp.cc_line_begin; });
+    if (it == map.begin())
+        return {0, nullptr};
     --it;
-    if (cc_line > it->cc_line_end) return {0, nullptr};
-    size_t weasel_line = it->kind == span_kind::ccx_region
-                             ? it->weasel_line_begin
-                             : it->weasel_line_begin + (cc_line - it->cc_line_begin);
-    if (weasel_line > it->weasel_line_end) weasel_line = it->weasel_line_end;
+    if (cc_line > it->cc_line_end)
+        return {0, nullptr};
+    size_t weasel_line = it->kind == span_kind::ccx_region ? it->weasel_line_begin : it->weasel_line_begin + (cc_line - it->cc_line_begin);
+    if (weasel_line > it->weasel_line_end)
+        weasel_line = it->weasel_line_end;
     return {weasel_line, &*it};
 }
 
-} // namespace weasel::compiler
+}  // namespace weasel::compiler

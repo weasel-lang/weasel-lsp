@@ -20,4 +20,4 @@ std::vector<ccx_span> find_ccx_spans(std::string_view src);
 // cache find_ccx_spans() themselves.
 bool is_position_in_ccx(std::string_view src, size_t offset);
 
-} // namespace weasel::compiler
+}  // namespace weasel::compiler

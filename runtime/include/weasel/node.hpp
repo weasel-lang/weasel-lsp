@@ -1,8 +1,8 @@
 #pragma once
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
-#include <utility>
 
 namespace weasel {
 
@@ -10,7 +10,7 @@ struct node;
 // node_list uses node before the full definition of node is available;
 // std::vector<T> may be instantiated with an incomplete T in C++17 and later.
 using node_list = std::vector<node>;
-using attrs_t   = std::vector<std::pair<std::string, std::string>>;
+using attrs_t = std::vector<std::pair<std::string, std::string>>;
 
 struct text_node {
     std::string content;
@@ -24,8 +24,8 @@ struct raw_node {
 
 struct element_node {
     std::string tag;
-    attrs_t     attrs;
-    node_list   children;
+    attrs_t attrs;
+    node_list children;
 };
 
 struct fragment_node {
@@ -37,4 +37,4 @@ struct node : std::variant<std::monostate, text_node, raw_node, element_node, fr
     using variant::variant;
 };
 
-} // namespace weasel
+}  // namespace weasel

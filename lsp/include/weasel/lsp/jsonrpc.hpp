@@ -23,4 +23,4 @@ json make_error_response(const json& id, int code, std::string_view message);
 // Helper: build a server-initiated notification.
 json make_notification(std::string_view method, json params);
 
-} // namespace weasel::lsp
+}  // namespace weasel::lsp

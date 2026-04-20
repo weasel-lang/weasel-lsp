@@ -1,13 +1,13 @@
 #pragma once
-#include "weasel/compiler/boundary.hpp"
-#include "weasel/compiler/diagnostic.hpp"
-#include "weasel/compiler/source.hpp"
-#include "weasel/compiler/transpiler.hpp"
 #include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include "weasel/compiler/boundary.hpp"
+#include "weasel/compiler/diagnostic.hpp"
+#include "weasel/compiler/source.hpp"
+#include "weasel/compiler/transpiler.hpp"
 
 namespace weasel::lsp {
 
@@ -37,14 +37,14 @@ struct doc_state {
 };
 
 class document_store {
-  public:
+   public:
     // Open/update a document. Reruns transpile-scan and refreshes caches.
     doc_state& open_or_update(std::string uri, std::string text, int version);
     void close(const std::string& uri);
     const doc_state* find(const std::string& uri) const;
     doc_state* find(const std::string& uri);
 
-  private:
+   private:
     std::unordered_map<std::string, doc_state> docs_;
 
     // Recompute components, spans, and diagnostics for `d` based on d.text.
@@ -70,7 +70,6 @@ struct lsp_position {
 lsp_position to_lsp_position(const weasel::compiler::source_buffer& buf, size_t offset);
 
 // Given an LSP position, find the byte offset in the buffer. Clamps to EOF.
-size_t offset_from_lsp_position(const weasel::compiler::source_buffer& buf,
-                                int line, int character);
+size_t offset_from_lsp_position(const weasel::compiler::source_buffer& buf, int line, int character);
 
-} // namespace weasel::lsp
+}  // namespace weasel::lsp

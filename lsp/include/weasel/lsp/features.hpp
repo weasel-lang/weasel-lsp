@@ -1,8 +1,8 @@
 #pragma once
-#include "weasel/lsp/document_store.hpp"
-#include "weasel/lsp/jsonrpc.hpp"
 #include <optional>
 #include <string_view>
+#include "weasel/lsp/document_store.hpp"
+#include "weasel/lsp/jsonrpc.hpp"
 
 namespace weasel::lsp {
 
@@ -21,12 +21,10 @@ std::string_view get_text_line(std::string_view text, int line_0);
 
 // Remap a weasel cursor position inside a CCX region to the corresponding
 // column in the generated .cc line, for hover and signature-help requests.
-std::optional<int> remap_ccx_hover_column(const doc_state& d,
-                                           int weasel_line_0, int weasel_char_0);
+std::optional<int> remap_ccx_hover_column(const doc_state& d, int weasel_line_0, int weasel_char_0);
 
 // Like remap_ccx_hover_column but handles '.' and '::' trigger characters,
 // used for completion requests inside CCX expressions.
-std::optional<int> remap_ccx_completion_column(const doc_state& d,
-                                                int weasel_line_0, int weasel_char_0);
+std::optional<int> remap_ccx_completion_column(const doc_state& d, int weasel_line_0, int weasel_char_0);
 
-} // namespace weasel::lsp
+}  // namespace weasel::lsp

@@ -1,7 +1,7 @@
+#include <sstream>
 #include "doctest.h"
 #include "weasel/factory.hpp"
 #include "weasel/renderer.hpp"
-#include <sstream>
 
 using namespace weasel;
 
@@ -35,17 +35,14 @@ TEST_CASE("attribute values are escaped") {
 }
 
 TEST_CASE("void elements have no closing tag") {
-    CHECK(render_to_string(tag("br"))  == "<br>");
-    CHECK(render_to_string(tag("hr"))  == "<hr>");
+    CHECK(render_to_string(tag("br")) == "<br>");
+    CHECK(render_to_string(tag("hr")) == "<hr>");
     CHECK(render_to_string(tag("img", {{"src", "x.png"}})) == R"(<img src="x.png">)");
     CHECK(render_to_string(tag("input", {{"type", "text"}})) == R"(<input type="text">)");
 }
 
 TEST_CASE("nested tree") {
-    auto n = tag("ul", {}, {
-        tag("li", {}, {text("one")}),
-        tag("li", {}, {text("two")})
-    });
+    auto n = tag("ul", {}, {tag("li", {}, {text("one")}), tag("li", {}, {text("two")})});
     CHECK(render_to_string(n) == "<ul><li>one</li><li>two</li></ul>");
 }
 
@@ -62,8 +59,8 @@ TEST_CASE("render to ostream") {
 
 TEST_CASE("void element tag name is case-normalised") {
     // tag("BR") must render as a void element (no closing tag), not <BR></BR>.
-    CHECK(render_to_string(tag("BR"))  == "<BR>");
-    CHECK(render_to_string(tag("HR"))  == "<HR>");
+    CHECK(render_to_string(tag("BR")) == "<BR>");
+    CHECK(render_to_string(tag("HR")) == "<HR>");
     CHECK(render_to_string(tag("IMG", {{"src", "x"}})) == R"(<IMG src="x">)");
     // Non-void tags are not affected by normalisation.
     CHECK(render_to_string(tag("DIV", {}, {text("x")})) == "<DIV>x</DIV>");

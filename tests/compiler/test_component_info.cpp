@@ -64,8 +64,7 @@ TEST_CASE("collect_component_infos: ignores 'component' without following '('") 
 }
 
 TEST_CASE("collect_component_infos: name set derivable from infos") {
-    auto v = collect_component_infos(
-        "component alpha(int) {}\ncomponent beta(int){}\n");
+    auto v = collect_component_infos("component alpha(int) {}\ncomponent beta(int){}\n");
     REQUIRE(v.size() == 2);
     CHECK(v[0].name == "alpha");
     CHECK(v[1].name == "beta");

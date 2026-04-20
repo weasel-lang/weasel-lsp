@@ -10,22 +10,15 @@ public:
 
     size_t pos() const { return pos_; }
     bool eof() const { return pos_ >= text_.size(); }
-    char peek(size_t off = 0) const {
-        return (pos_ + off < text_.size()) ? text_[pos_ + off] : '\0';
-    }
+    char peek(size_t off = 0) const { return (pos_ + off < text_.size()) ? text_[pos_ + off] : '\0'; }
     bool starts_with(std::string_view s) const {
-        if (pos_ + s.size() > text_.size()) return false;
+        if (pos_ + s.size() > text_.size())
+            return false;
         return text_.compare(pos_, s.size(), s) == 0;
     }
-    void advance(size_t n = 1) {
-        pos_ = (pos_ + n > text_.size()) ? text_.size() : pos_ + n;
-    }
-    void set_pos(size_t p) {
-        pos_ = (p > text_.size()) ? text_.size() : p;
-    }
-    std::string_view view(size_t start, size_t end) const {
-        return text_.substr(start, end - start);
-    }
+    void advance(size_t n = 1) { pos_ = (pos_ + n > text_.size()) ? text_.size() : pos_ + n; }
+    void set_pos(size_t p) { pos_ = (p > text_.size()) ? text_.size() : p; }
+    std::string_view view(size_t start, size_t end) const { return text_.substr(start, end - start); }
     std::string_view text() const { return text_; }
 
     std::string_view read_identifier();
@@ -56,4 +49,4 @@ private:
     size_t pos_ = 0;
 };
 
-} // namespace weasel::compiler
+}  // namespace weasel::compiler

@@ -1,10 +1,10 @@
 #pragma once
-#include "weasel/compiler/source.hpp"
 #include <functional>
 #include <ostream>
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include "weasel/compiler/source.hpp"
 
 namespace weasel::compiler {
 
@@ -55,4 +55,4 @@ ccx_node parse_element(scanner& s,
                        const brace_capture_fn& capture,
                        const source_buffer* buf = nullptr);
 
-} // namespace weasel::compiler
+}  // namespace weasel::compiler

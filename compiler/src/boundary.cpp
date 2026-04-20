@@ -3,8 +3,6 @@
 #include <ostream>
 #include <streambuf>
 
-namespace weasel::compiler {
-
 namespace {
 // A streambuf that discards everything written to it.
 class null_streambuf : public std::streambuf {
@@ -13,6 +11,8 @@ class null_streambuf : public std::streambuf {
     std::streamsize xsputn(const char *, std::streamsize n) override { return n; }
 };
 } // namespace
+
+namespace weasel::compiler {
 
 std::vector<ccx_span> find_ccx_spans(std::string_view src) {
     std::vector<ccx_span> out;

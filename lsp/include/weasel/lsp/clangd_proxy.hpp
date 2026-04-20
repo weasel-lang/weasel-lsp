@@ -1,5 +1,4 @@
 #pragma once
-#include "weasel/lsp/jsonrpc.hpp"
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -9,6 +8,7 @@
 #include <string_view>
 #include <thread>
 #include <unordered_map>
+#include "weasel/lsp/jsonrpc.hpp"
 
 namespace weasel::lsp {
 
@@ -22,16 +22,14 @@ namespace weasel::lsp {
 //   internal reader thread. Handlers that write to the editor output must
 //   serialize via the server's write mutex.
 class clangd_proxy {
-  public:
+   public:
     using response_cb = std::function<void(const json& result, const json& error)>;
-    using notification_cb = std::function<void(const std::string& method,
-                                               const json& params)>;
+    using notification_cb = std::function<void(const std::string& method, const json& params)>;
 
     // Spawn clangd. Returns nullptr on any failure (no clangd on PATH, pipe
     // creation error, etc.). `compile_commands_dir` is an absolute path passed
     // as --compile-commands-dir; empty means don't pass the flag.
-    static std::unique_ptr<clangd_proxy>
-    spawn(std::string_view compile_commands_dir = "");
+    static std::unique_ptr<clangd_proxy> spawn(std::string_view compile_commands_dir = "");
 
     ~clangd_proxy();
 
@@ -52,7 +50,7 @@ class clangd_proxy {
     // terminate. Called from server::run teardown.
     void shutdown();
 
-  private:
+   private:
     clangd_proxy(int stdin_fd, int stdout_fd, int pid);
 
     void reader_loop();
@@ -74,4 +72,4 @@ class clangd_proxy {
     notification_cb notification_handler_;
 };
 
-} // namespace weasel::lsp
+}  // namespace weasel::lsp

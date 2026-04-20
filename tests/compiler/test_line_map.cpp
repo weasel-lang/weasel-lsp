@@ -1,7 +1,7 @@
 #include <doctest.h>
 
-#include "weasel/compiler/transpiler.hpp"
 #include <sstream>
+#include "weasel/compiler/transpiler.hpp"
 
 using namespace weasel::compiler;
 
@@ -28,8 +28,9 @@ TEST_CASE("transpile_with_map — single CCX expression produces cpp + ccx spans
     REQUIRE(r.ok);
     // At minimum, there should be a ccx_region span covering the <div/>.
     bool saw_ccx = false;
-    for (const auto &sp : r.line_map) {
-        if (sp.kind == span_kind::ccx_region) saw_ccx = true;
+    for (const auto& sp : r.line_map) {
+        if (sp.kind == span_kind::ccx_region)
+            saw_ccx = true;
     }
     CHECK(saw_ccx);
 }
@@ -60,11 +61,11 @@ TEST_CASE("transpile_with_map — if inside CCX with multi-line body") {
     // lines inside it. Verify the transpiler succeeds, produces ccx+cpp spans,
     // and emits the if-chain IIFE.
     const char* src =
-        "node f(bool b) {\n"               // line 1
-        "return <div>{ if (b) {\n"         // line 2  — CCX starts at <div>
-        "    <p>yes</p>\n"                 // line 3
-        "} }</div>;\n"                     // line 4  — CCX ends at </div>
-        "}\n";                             // line 5
+        "node f(bool b) {\n"        // line 1
+        "return <div>{ if (b) {\n"  // line 2  — CCX starts at <div>
+        "    <p>yes</p>\n"          // line 3
+        "} }</div>;\n"              // line 4  — CCX ends at </div>
+        "}\n";                      // line 5
     std::ostringstream out;
     auto r = transpile_with_map(src, out);
     REQUIRE(r.ok);
@@ -75,7 +76,8 @@ TEST_CASE("transpile_with_map — if inside CCX with multi-line body") {
             // The CCX region spans at least lines 2–4 of the .weasel source.
             CHECK(sp.weasel_line_end > sp.weasel_line_begin);
         }
-        if (sp.kind == span_kind::cpp_passthrough) saw_cpp = true;
+        if (sp.kind == span_kind::cpp_passthrough)
+            saw_cpp = true;
     }
     CHECK(saw_ccx);
     CHECK(saw_cpp);
@@ -84,10 +86,10 @@ TEST_CASE("transpile_with_map — if inside CCX with multi-line body") {
 
 TEST_CASE("transpile_with_map — for head spanning two source lines") {
     const char* src =
-        "node f(const std::vector<int>& v) {\n"   // line 1
-        "return <ul>{ for (\n"                     // line 2  — CCX starts
-        "    int x : v) { <li>{x}</li> } }</ul>;\n" // line 3
-        "}\n";                                      // line 4
+        "node f(const std::vector<int>& v) {\n"      // line 1
+        "return <ul>{ for (\n"                       // line 2  — CCX starts
+        "    int x : v) { <li>{x}</li> } }</ul>;\n"  // line 3
+        "}\n";                                       // line 4
     std::ostringstream out;
     auto r = transpile_with_map(src, out);
     REQUIRE(r.ok);
@@ -102,15 +104,16 @@ TEST_CASE("transpile_with_map — for head spanning two source lines") {
 TEST_CASE("transpile_with_map — empty CCX region (self-closing on own line)") {
     // A single-line self-closing element is a valid CCX region with begin==end.
     const char* src =
-        "node f() {\n"          // line 1
-        "return <br/>;\n"       // line 2
-        "}\n";                  // line 3
+        "node f() {\n"     // line 1
+        "return <br/>;\n"  // line 2
+        "}\n";             // line 3
     std::ostringstream out;
     auto r = transpile_with_map(src, out);
     REQUIRE(r.ok);
     bool saw_ccx = false;
     for (const auto& sp : r.line_map) {
-        if (sp.kind == span_kind::ccx_region) saw_ccx = true;
+        if (sp.kind == span_kind::ccx_region)
+            saw_ccx = true;
     }
     CHECK(saw_ccx);
     // Verify the generated output contains the weasel br call.

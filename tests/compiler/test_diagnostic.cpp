@@ -1,7 +1,7 @@
 #include <doctest.h>
+#include <sstream>
 #include "weasel/compiler/diagnostic.hpp"
 #include "weasel/compiler/transpiler.hpp"
-#include <sstream>
 
 using weasel::compiler::diagnostic;
 using weasel::compiler::parse_error;

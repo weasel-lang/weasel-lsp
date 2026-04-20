@@ -40,10 +40,7 @@ TEST_CASE("tag() preserves attribute order") {
 }
 
 TEST_CASE("tag() nests children") {
-    auto n = tag("ul", {}, {
-        tag("li", {}, {text("one")}),
-        tag("li", {}, {text("two")})
-    });
+    auto n = tag("ul", {}, {tag("li", {}, {text("one")}), tag("li", {}, {text("two")})});
     auto& e = std::get<element_node>(n);
     CHECK(e.children.size() == 2);
     CHECK(std::get<element_node>(e.children[0]).tag == "li");

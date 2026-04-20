@@ -1,6 +1,5 @@
 #pragma once
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace weasel::compiler {
@@ -26,4 +25,4 @@ struct source_buffer {
 source_buffer load_source(const std::string& filename);
 source_buffer make_source(std::string filename, std::string text);
 
-} // namespace weasel::compiler
+}  // namespace weasel::compiler

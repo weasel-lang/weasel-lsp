@@ -1,11 +1,11 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest.h>
-#include "weasel/compiler/transpiler.hpp"
 #include <sstream>
 #include <string>
+#include "weasel/compiler/transpiler.hpp"
 
-using weasel::compiler::transpile;
 using weasel::compiler::collect_component_infos;
+using weasel::compiler::transpile;
 
 static std::string run(std::string_view src) {
     std::ostringstream oss;
@@ -69,8 +69,7 @@ TEST_CASE("component element emits designated init call") {
 }
 
 TEST_CASE("if child lowered to IIFE") {
-    std::string src =
-        "node f(bool show) { return <div>{ if (show) { <p>yes</p> } }</div>; }\n";
+    std::string src = "node f(bool show) { return <div>{ if (show) { <p>yes</p> } }</div>; }\n";
     std::string out = run(src);
     CHECK(out.find("[&]() -> weasel::node") != std::string::npos);
     CHECK(out.find("if (show) { return weasel::tag(\"p\"") != std::string::npos);

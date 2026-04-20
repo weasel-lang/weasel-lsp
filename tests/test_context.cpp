@@ -1,11 +1,13 @@
+#include <string>
+#include <thread>
 #include "doctest.h"
 #include "weasel/context.hpp"
-#include <thread>
-#include <string>
 
 using namespace weasel;
 
-struct theme { std::string name; };
+struct theme {
+    std::string name;
+};
 using theme_ctx = context<theme>;
 
 TEST_CASE("current() throws when no provider") {

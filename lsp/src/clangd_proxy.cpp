@@ -1,5 +1,9 @@
 #include "weasel/lsp/clangd_proxy.hpp"
 
+#include <spawn.h>
+#include <strings.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <chrono>
 #include <condition_variable>
 #include <csignal>
@@ -7,10 +11,6 @@
 #include <cstring>
 #include <iostream>
 #include <optional>
-#include <spawn.h>
-#include <strings.h>
-#include <sys/wait.h>
-#include <unistd.h>
 #include <vector>
 
 extern char** environ;
@@ -18,7 +18,9 @@ extern char** environ;
 namespace weasel::lsp {
 
 namespace {
-std::ostream& log() { return std::cerr; }
+std::ostream& log() {
+    return std::cerr;
+}
 
 // Read a single LSP-framed message from a raw file descriptor. Returns
 // std::nullopt on EOF or error. Blocks until a full message is available.
@@ -32,30 +34,34 @@ std::optional<json> read_framed_from_fd(int fd) {
         std::string line;
         while (true) {
             ssize_t n = ::read(fd, &c, 1);
-            if (n <= 0) return std::nullopt;
+            if (n <= 0)
+                return std::nullopt;
             line.push_back(c);
             if (line.size() >= 2 && line[line.size() - 2] == '\r' && line.back() == '\n') {
                 break;
             }
         }
-        if (line == "\r\n") break;  // end of headers
+        if (line == "\r\n")
+            break;  // end of headers
         // Parse "Content-Length: N"
         constexpr std::string_view cl = "Content-Length:";
-        if (line.size() > cl.size() &&
-            strncasecmp(line.data(), cl.data(), cl.size()) == 0) {
+        if (line.size() > cl.size() && strncasecmp(line.data(), cl.data(), cl.size()) == 0) {
             size_t i = cl.size();
-            while (i < line.size() && (line[i] == ' ' || line[i] == '\t')) ++i;
-            constexpr size_t max_message_size = 64u * 1024 * 1024; // 64 MiB
+            while (i < line.size() && (line[i] == ' ' || line[i] == '\t'))
+                ++i;
+            constexpr size_t max_message_size = 64u * 1024 * 1024;  // 64 MiB
             size_t v = std::strtoull(line.c_str() + i, nullptr, 10);
             content_length = (v <= max_message_size) ? v : 0;
         }
     }
-    if (content_length == 0) return json::object();
+    if (content_length == 0)
+        return json::object();
     std::string body(content_length, '\0');
     size_t got = 0;
     while (got < content_length) {
         ssize_t n = ::read(fd, body.data() + got, content_length - got);
-        if (n <= 0) return std::nullopt;
+        if (n <= 0)
+            return std::nullopt;
         got += static_cast<size_t>(n);
     }
     try {
@@ -74,7 +80,8 @@ void write_framed_to_fd(int fd, const json& msg) {
 
 std::string find_clangd_path() {
     if (const char* env = std::getenv("WEASEL_CLANGD_PATH")) {
-        if (*env) return env;
+        if (*env)
+            return env;
     }
     return "clangd";
 }
@@ -83,19 +90,20 @@ std::string find_clangd_path() {
 // it directly. Bare names rely on PATH lookup done by posix_spawnp, so we
 // skip the probe (access() wouldn't search PATH).
 void maybe_warn_clangd_not_found(const std::string& exe) {
-    if (exe.find('/') == std::string::npos) return;
+    if (exe.find('/') == std::string::npos)
+        return;
     if (::access(exe.c_str(), X_OK) != 0) {
-        log() << "weasel-lsp: clangd not found or not executable at '"
-              << exe << "'; will attempt spawn anyway\n";
+        log() << "weasel-lsp: clangd not found or not executable at '" << exe << "'; will attempt spawn anyway\n";
     }
 }
 
-} // namespace
+}  // namespace
 
 std::unique_ptr<clangd_proxy> clangd_proxy::spawn(std::string_view compile_commands_dir) {
-    int to_child[2];   // parent writes to [1], child reads from [0]
-    int from_child[2]; // child writes to [1], parent reads from [0]
-    if (::pipe(to_child) != 0) return nullptr;
+    int to_child[2];    // parent writes to [1], child reads from [0]
+    int from_child[2];  // child writes to [1], parent reads from [0]
+    if (::pipe(to_child) != 0)
+        return nullptr;
     if (::pipe(from_child) != 0) {
         ::close(to_child[0]);
         ::close(to_child[1]);
@@ -104,8 +112,10 @@ std::unique_ptr<clangd_proxy> clangd_proxy::spawn(std::string_view compile_comma
 
     posix_spawn_file_actions_t actions;
     if (posix_spawn_file_actions_init(&actions) != 0) {
-        ::close(to_child[0]); ::close(to_child[1]);
-        ::close(from_child[0]); ::close(from_child[1]);
+        ::close(to_child[0]);
+        ::close(to_child[1]);
+        ::close(from_child[0]);
+        ::close(from_child[1]);
         return nullptr;
     }
     posix_spawn_file_actions_adddup2(&actions, to_child[0], STDIN_FILENO);
@@ -127,7 +137,8 @@ std::unique_ptr<clangd_proxy> clangd_proxy::spawn(std::string_view compile_comma
         args_storage.push_back(ccd_flag);
     }
     std::vector<char*> argv;
-    for (auto& s : args_storage) argv.push_back(s.data());
+    for (auto& s : args_storage)
+        argv.push_back(s.data());
     argv.push_back(nullptr);
 
     pid_t pid = 0;
@@ -138,8 +149,7 @@ std::unique_ptr<clangd_proxy> clangd_proxy::spawn(std::string_view compile_comma
     ::close(to_child[0]);
     ::close(from_child[1]);
     if (rc != 0) {
-        log() << "weasel-lsp: clangd spawn failed (" << std::strerror(rc)
-              << "); falling back to v0.5 mode without C++ intelligence\n";
+        log() << "weasel-lsp: clangd spawn failed (" << std::strerror(rc) << "); falling back to v0.5 mode without C++ intelligence\n";
         ::close(to_child[1]);
         ::close(from_child[0]);
         return nullptr;
@@ -151,8 +161,7 @@ std::unique_ptr<clangd_proxy> clangd_proxy::spawn(std::string_view compile_comma
     return p;
 }
 
-clangd_proxy::clangd_proxy(int stdin_fd, int stdout_fd, int pid)
-    : stdin_fd_(stdin_fd), stdout_fd_(stdout_fd), pid_(pid) {}
+clangd_proxy::clangd_proxy(int stdin_fd, int stdout_fd, int pid) : stdin_fd_(stdin_fd), stdout_fd_(stdout_fd), pid_(pid) {}
 
 clangd_proxy::~clangd_proxy() {
     shutdown();
@@ -160,7 +169,8 @@ clangd_proxy::~clangd_proxy() {
 
 void clangd_proxy::shutdown() {
     bool expected = false;
-    if (!stopping_.compare_exchange_strong(expected, true)) return;
+    if (!stopping_.compare_exchange_strong(expected, true))
+        return;
 
     if (stdin_fd_ >= 0) {
         // Use the proxy's request/response flow so we know when clangd has
@@ -179,19 +189,27 @@ void clangd_proxy::shutdown() {
             });
             std::unique_lock<std::mutex> lk(m);
             cv.wait_for(lk, std::chrono::seconds(2), [&] { return done; });
-        } catch (...) {}
-        try { send_notification("exit", json::object()); } catch (...) {}
+        } catch (...) {
+        }
+        try {
+            send_notification("exit", json::object());
+        } catch (...) {
+        }
         ::close(stdin_fd_);
         stdin_fd_ = -1;
     }
 
-    if (reader_.joinable()) reader_.join();
+    if (reader_.joinable())
+        reader_.join();
 
     if (pid_ > 0) {
         int status = 0;
         for (int i = 0; i < 200; ++i) {
             pid_t r = ::waitpid(pid_, &status, WNOHANG);
-            if (r == pid_) { pid_ = -1; break; }
+            if (r == pid_) {
+                pid_ = -1;
+                break;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         if (pid_ > 0) {
@@ -209,13 +227,13 @@ void clangd_proxy::shutdown() {
 
 void clangd_proxy::write_to_clangd(const json& msg) {
     std::lock_guard<std::mutex> lk(write_mutex_);
-    if (stdin_fd_ < 0) return;
+    if (stdin_fd_ < 0)
+        return;
     write_framed_to_fd(stdin_fd_, msg);
 }
 
 void clangd_proxy::send_notification(std::string_view method, json params) {
-    json m = {{"jsonrpc", "2.0"}, {"method", std::string(method)},
-              {"params", std::move(params)}};
+    json m = {{"jsonrpc", "2.0"}, {"method", std::string(method)}, {"params", std::move(params)}};
     write_to_clangd(m);
 }
 
@@ -225,8 +243,7 @@ void clangd_proxy::send_request(std::string_view method, json params, response_c
         std::lock_guard<std::mutex> lk(pending_mutex_);
         pending_.emplace(id, std::move(cb));
     }
-    json m = {{"jsonrpc", "2.0"}, {"id", id}, {"method", std::string(method)},
-              {"params", std::move(params)}};
+    json m = {{"jsonrpc", "2.0"}, {"id", id}, {"method", std::string(method)}, {"params", std::move(params)}};
     write_to_clangd(m);
 }
 
@@ -239,12 +256,15 @@ void clangd_proxy::reader_loop() {
     // Runs until clangd closes its stdout (natural EOF after processing `exit`).
     while (true) {
         auto msg = read_framed_from_fd(stdout_fd_);
-        if (!msg) return;
+        if (!msg)
+            return;
 
         // Response (has id AND no method, or has id with result/error only)
         if (msg->contains("id") && !msg->contains("method")) {
             std::int64_t id = 0;
-            try { id = msg->at("id").get<std::int64_t>(); } catch (...) {
+            try {
+                id = msg->at("id").get<std::int64_t>();
+            } catch (...) {
                 log() << "weasel-lsp: unexpected id type in clangd response (expected integer); dropping\n";
                 continue;
             }
@@ -252,14 +272,19 @@ void clangd_proxy::reader_loop() {
             {
                 std::lock_guard<std::mutex> lk(pending_mutex_);
                 auto it = pending_.find(id);
-                if (it == pending_.end()) continue;
+                if (it == pending_.end())
+                    continue;
                 cb = std::move(it->second);
                 pending_.erase(it);
             }
             json result = msg->value("result", json(nullptr));
-            json err    = msg->value("error",  json(nullptr));
-            try { if (cb) cb(result, err); }
-            catch (const std::exception& e) { log() << "weasel-lsp: response cb threw: " << e.what() << "\n"; }
+            json err = msg->value("error", json(nullptr));
+            try {
+                if (cb)
+                    cb(result, err);
+            } catch (const std::exception& e) {
+                log() << "weasel-lsp: response cb threw: " << e.what() << "\n";
+            }
             continue;
         }
 
@@ -272,8 +297,12 @@ void clangd_proxy::reader_loop() {
                 std::lock_guard<std::mutex> lk(handler_mutex_);
                 handler = notification_handler_;
             }
-            try { if (handler) handler(method, params); }
-            catch (const std::exception& e) { log() << "weasel-lsp: notif cb threw: " << e.what() << "\n"; }
+            try {
+                if (handler)
+                    handler(method, params);
+            } catch (const std::exception& e) {
+                log() << "weasel-lsp: notif cb threw: " << e.what() << "\n";
+            }
             // Server-initiated requests from clangd (e.g. workspace/configuration):
             // we don't proxy them to the editor in v1. Send a generic null-result
             // reply so clangd isn't stuck waiting.
@@ -286,4 +315,4 @@ void clangd_proxy::reader_loop() {
     }
 }
 
-} // namespace weasel::lsp
+}  // namespace weasel::lsp

@@ -1,10 +1,10 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest.h>
 
-#include "weasel/lsp/jsonrpc.hpp"
-#include "weasel/lsp/server.hpp"
 #include <sstream>
 #include <string>
+#include "weasel/lsp/jsonrpc.hpp"
+#include "weasel/lsp/server.hpp"
 
 using weasel::lsp::json;
 using weasel::lsp::server;
@@ -26,7 +26,8 @@ std::vector<json> parse_all_framed(const std::string& s) {
     std::istringstream iss(s);
     while (true) {
         auto msg = weasel::lsp::read_message(iss);
-        if (!msg) break;
+        if (!msg)
+            break;
         out.push_back(*msg);
     }
     return out;
@@ -42,7 +43,8 @@ json make_notif(std::string_view method, json params) {
 
 std::vector<json> drive(const std::vector<json>& inputs) {
     std::string raw_in;
-    for (const auto& m : inputs) append_framed(raw_in, m);
+    for (const auto& m : inputs)
+        append_framed(raw_in, m);
     std::istringstream in(raw_in);
     std::ostringstream out;
     server srv(in, out);
@@ -50,7 +52,7 @@ std::vector<json> drive(const std::vector<json>& inputs) {
     return parse_all_framed(out.str());
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("initialize → initialize response with capabilities") {
     auto msgs = drive({
@@ -71,14 +73,16 @@ TEST_CASE("initialize → initialize response with capabilities") {
 TEST_CASE("didOpen publishes diagnostics (success: empty list)") {
     auto msgs = drive({
         make_request(1, "initialize", json::object()),
-        make_notif("textDocument/didOpen", {
-            {"textDocument", {
-                {"uri", "file:///tmp/hello.weasel"},
-                {"languageId", "weasel"},
-                {"version", 1},
-                {"text", "node f() { return <p>hi</p>; }\n"},
-            }},
-        }),
+        make_notif("textDocument/didOpen",
+                   {
+                       {"textDocument",
+                        {
+                            {"uri", "file:///tmp/hello.weasel"},
+                            {"languageId", "weasel"},
+                            {"version", 1},
+                            {"text", "node f() { return <p>hi</p>; }\n"},
+                        }},
+                   }),
         make_request(2, "shutdown"),
         make_notif("exit", json::object()),
     });
@@ -98,14 +102,16 @@ TEST_CASE("didOpen publishes diagnostics (success: empty list)") {
 TEST_CASE("didOpen with parse error publishes diagnostic with position") {
     auto msgs = drive({
         make_request(1, "initialize", json::object()),
-        make_notif("textDocument/didOpen", {
-            {"textDocument", {
-                {"uri", "file:///tmp/bad.weasel"},
-                {"languageId", "weasel"},
-                {"version", 1},
-                {"text", "node f() { return <div></span>; }\n"},
-            }},
-        }),
+        make_notif("textDocument/didOpen",
+                   {
+                       {"textDocument",
+                        {
+                            {"uri", "file:///tmp/bad.weasel"},
+                            {"languageId", "weasel"},
+                            {"version", 1},
+                            {"text", "node f() { return <div></span>; }\n"},
+                        }},
+                   }),
         make_request(2, "shutdown"),
         make_notif("exit", json::object()),
     });
@@ -127,27 +133,31 @@ TEST_CASE("didOpen with parse error publishes diagnostic with position") {
 TEST_CASE("textDocument/definition jumps to component") {
     auto msgs = drive({
         make_request(1, "initialize", json::object()),
-        make_notif("textDocument/didOpen", {
-            {"textDocument", {
-                {"uri", "file:///tmp/d.weasel"},
-                {"languageId", "weasel"},
-                {"version", 1},
-                {"text",
-                    "component MyCard(int) { return <div/>; }\n"
-                    "node page() { return <MyCard/>; }\n"},
-            }},
-        }),
+        make_notif("textDocument/didOpen",
+                   {
+                       {"textDocument",
+                        {
+                            {"uri", "file:///tmp/d.weasel"},
+                            {"languageId", "weasel"},
+                            {"version", 1},
+                            {"text",
+                             "component MyCard(int) { return <div/>; }\n"
+                             "node page() { return <MyCard/>; }\n"},
+                        }},
+                   }),
         // The <MyCard/> is on line 1 (0-based); MyCard starts around column 22.
-        make_request(2, "textDocument/definition", {
-            {"textDocument", {{"uri", "file:///tmp/d.weasel"}}},
-            {"position", {{"line", 1}, {"character", 23}}},  // on 'M' of MyCard
-        }),
+        make_request(2, "textDocument/definition",
+                     {
+                         {"textDocument", {{"uri", "file:///tmp/d.weasel"}}},
+                         {"position", {{"line", 1}, {"character", 23}}},  // on 'M' of MyCard
+                     }),
         make_request(3, "shutdown"),
         make_notif("exit", json::object()),
     });
     json def;
     for (const auto& m : msgs) {
-        if (m.value("id", -1) == 2) def = m;
+        if (m.value("id", -1) == 2)
+            def = m;
     }
     REQUIRE(!def.is_null());
     const auto& result = def.at("result");
@@ -159,27 +169,31 @@ TEST_CASE("textDocument/definition jumps to component") {
 TEST_CASE("textDocument/completion offers CCX tags and components inside CCX") {
     auto msgs = drive({
         make_request(1, "initialize", json::object()),
-        make_notif("textDocument/didOpen", {
-            {"textDocument", {
-                {"uri", "file:///tmp/c.weasel"},
-                {"languageId", "weasel"},
-                {"version", 1},
-                {"text",
-                    "component MyCard(int) { return <div/>; }\n"
-                    "node page() { return <div>hello</div>; }\n"},
-            }},
-        }),
+        make_notif("textDocument/didOpen",
+                   {
+                       {"textDocument",
+                        {
+                            {"uri", "file:///tmp/c.weasel"},
+                            {"languageId", "weasel"},
+                            {"version", 1},
+                            {"text",
+                             "component MyCard(int) { return <div/>; }\n"
+                             "node page() { return <div>hello</div>; }\n"},
+                        }},
+                   }),
         // Cursor inside the <div>...</div> on line 1
-        make_request(2, "textDocument/completion", {
-            {"textDocument", {{"uri", "file:///tmp/c.weasel"}}},
-            {"position", {{"line", 1}, {"character", 25}}},  // somewhere in CCX
-        }),
+        make_request(2, "textDocument/completion",
+                     {
+                         {"textDocument", {{"uri", "file:///tmp/c.weasel"}}},
+                         {"position", {{"line", 1}, {"character", 25}}},  // somewhere in CCX
+                     }),
         make_request(3, "shutdown"),
         make_notif("exit", json::object()),
     });
     json compl_resp;
     for (const auto& m : msgs) {
-        if (m.value("id", -1) == 2) compl_resp = m;
+        if (m.value("id", -1) == 2)
+            compl_resp = m;
     }
     REQUIRE(!compl_resp.is_null());
     const auto& items = compl_resp.at("result").at("items");
@@ -187,8 +201,10 @@ TEST_CASE("textDocument/completion offers CCX tags and components inside CCX") {
     CHECK(items.size() > 0);
     bool saw_div = false, saw_mycard = false;
     for (const auto& it : items) {
-        if (it.at("label") == "div") saw_div = true;
-        if (it.at("label") == "MyCard") saw_mycard = true;
+        if (it.at("label") == "div")
+            saw_div = true;
+        if (it.at("label") == "MyCard")
+            saw_mycard = true;
     }
     CHECK(saw_div);
     CHECK(saw_mycard);
@@ -200,30 +216,35 @@ TEST_CASE("completion inside CCX expression {…} returns empty not HTML tags") 
     // The {x} attribute expression starts at column 34 (0-based).
     auto msgs = drive({
         make_request(1, "initialize", json::object()),
-        make_notif("textDocument/didOpen", {
-            {"textDocument", {
-                {"uri", "file:///tmp/expr.weasel"},
-                {"languageId", "weasel"},
-                {"version", 1},
-                {"text", "node f(int x) { return <div class={x}>hi</div>; }\n"},
-            }},
-        }),
-        make_request(2, "textDocument/completion", {
-            {"textDocument", {{"uri", "file:///tmp/expr.weasel"}}},
-            {"position", {{"line", 0}, {"character", 35}}},  // on 'x' inside {x}
-        }),
+        make_notif("textDocument/didOpen",
+                   {
+                       {"textDocument",
+                        {
+                            {"uri", "file:///tmp/expr.weasel"},
+                            {"languageId", "weasel"},
+                            {"version", 1},
+                            {"text", "node f(int x) { return <div class={x}>hi</div>; }\n"},
+                        }},
+                   }),
+        make_request(2, "textDocument/completion",
+                     {
+                         {"textDocument", {{"uri", "file:///tmp/expr.weasel"}}},
+                         {"position", {{"line", 0}, {"character", 35}}},  // on 'x' inside {x}
+                     }),
         make_request(3, "shutdown"),
         make_notif("exit", json::object()),
     });
     json resp;
     for (const auto& m : msgs) {
-        if (m.value("id", -1) == 2) resp = m;
+        if (m.value("id", -1) == 2)
+            resp = m;
     }
     REQUIRE(!resp.is_null());
     const auto& items = resp.at("result").at("items");
     bool saw_html_tag = false;
     for (const auto& it : items) {
-        if (it.value("detail", "") == "HTML element") saw_html_tag = true;
+        if (it.value("detail", "") == "HTML element")
+            saw_html_tag = true;
     }
     CHECK(!saw_html_tag);
 }
@@ -231,24 +252,28 @@ TEST_CASE("completion inside CCX expression {…} returns empty not HTML tags") 
 TEST_CASE("completion outside CCX is empty (v0.5)") {
     auto msgs = drive({
         make_request(1, "initialize", json::object()),
-        make_notif("textDocument/didOpen", {
-            {"textDocument", {
-                {"uri", "file:///tmp/o.weasel"},
-                {"languageId", "weasel"},
-                {"version", 1},
-                {"text", "int f() { return 0; }\n"},
-            }},
-        }),
-        make_request(2, "textDocument/completion", {
-            {"textDocument", {{"uri", "file:///tmp/o.weasel"}}},
-            {"position", {{"line", 0}, {"character", 5}}},
-        }),
+        make_notif("textDocument/didOpen",
+                   {
+                       {"textDocument",
+                        {
+                            {"uri", "file:///tmp/o.weasel"},
+                            {"languageId", "weasel"},
+                            {"version", 1},
+                            {"text", "int f() { return 0; }\n"},
+                        }},
+                   }),
+        make_request(2, "textDocument/completion",
+                     {
+                         {"textDocument", {{"uri", "file:///tmp/o.weasel"}}},
+                         {"position", {{"line", 0}, {"character", 5}}},
+                     }),
         make_request(3, "shutdown"),
         make_notif("exit", json::object()),
     });
     json resp;
     for (const auto& m : msgs) {
-        if (m.value("id", -1) == 2) resp = m;
+        if (m.value("id", -1) == 2)
+            resp = m;
     }
     REQUIRE(!resp.is_null());
     CHECK(resp.at("result").at("items").empty());

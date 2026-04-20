@@ -1,21 +1,21 @@
 #pragma once
-#include "weasel/lsp/clangd_proxy.hpp"
-#include "weasel/lsp/document_store.hpp"
-#include "weasel/lsp/jsonrpc.hpp"
 #include <iosfwd>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include "weasel/lsp/clangd_proxy.hpp"
+#include "weasel/lsp/document_store.hpp"
+#include "weasel/lsp/jsonrpc.hpp"
 
 namespace weasel::lsp {
 
 class server {
-  public:
+   public:
     server(std::istream& in, std::ostream& out);
     int run();  // returns process exit code
 
-  private:
+   private:
     void handle_message(const json& msg);
     void handle_request(const json& id, const std::string& method, const json& params);
     void handle_notification(const std::string& method, const json& params);
@@ -48,8 +48,7 @@ class server {
     // remaps response. Returns true if handled (response already written).
     // Returns false if the request should fall through to the v0.5 path (e.g.
     // clangd not available or position is inside a CCX region).
-    bool forward_request_to_clangd(const json& id, const std::string& method,
-                                   const json& params);
+    bool forward_request_to_clangd(const json& id, const std::string& method, const json& params);
 
     std::istream& in_;
     std::ostream& out_;
@@ -69,4 +68,4 @@ class server {
     std::vector<std::string> clangd_pending_open_uris_;
 };
 
-} // namespace weasel::lsp
+}  // namespace weasel::lsp
