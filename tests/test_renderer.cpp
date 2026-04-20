@@ -59,3 +59,19 @@ TEST_CASE("render to ostream") {
     render(tag("span", {}, {text("hi")}), oss);
     CHECK(oss.str() == "<span>hi</span>");
 }
+
+TEST_CASE("void element tag name is case-normalised") {
+    // tag("BR") must render as a void element (no closing tag), not <BR></BR>.
+    CHECK(render_to_string(tag("BR"))  == "<BR>");
+    CHECK(render_to_string(tag("HR"))  == "<HR>");
+    CHECK(render_to_string(tag("IMG", {{"src", "x"}})) == R"(<IMG src="x">)");
+    // Non-void tags are not affected by normalisation.
+    CHECK(render_to_string(tag("DIV", {}, {text("x")})) == "<DIV>x</DIV>");
+}
+
+TEST_CASE("attribute values escape whitespace control chars") {
+    // Newline, carriage return, and tab in attribute values must be
+    // entity-encoded so they do not break attribute parsing.
+    auto n = tag("input", {{"value", "a\nb\rc\td"}});
+    CHECK(render_to_string(n) == R"(<input value="a&#10;b&#13;c&#9;d">)");
+}

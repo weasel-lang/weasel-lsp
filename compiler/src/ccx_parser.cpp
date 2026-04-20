@@ -65,7 +65,7 @@ ccx_node parse_if_child(scanner& s,
         if (s.peek() != '(') fail(s, "expected '(' after 'if'");
         s.advance();
         std::ostringstream cond;
-        cap(cond);
+        cap(cond, capture_kind::paren);
         br.cond_cpp = cond.str();
         std::vector<ccx_node> body;
         parse_block_body(s, comps, cap, body, buf);
@@ -122,7 +122,7 @@ ccx_node parse_for_child(scanner& s,
     if (s.peek() != '(') fail(s, "expected '(' after 'for'");
     s.advance();
     std::ostringstream head;
-    cap(head);
+    cap(head, capture_kind::paren);
     n.head_cpp = head.str();
     std::vector<ccx_node> body;
     parse_block_body(s, comps, cap, body, buf);
@@ -142,7 +142,7 @@ ccx_node parse_while_child(scanner& s,
     if (s.peek() != '(') fail(s, "expected '(' after 'while'");
     s.advance();
     std::ostringstream head;
-    cap(head);
+    cap(head, capture_kind::paren);
     n.head_cpp = head.str();
     std::vector<ccx_node> body;
     parse_block_body(s, comps, cap, body, buf);
@@ -179,7 +179,7 @@ ccx_node parse_brace_child(scanner& s,
     n.k = ccx_node::kind::expr_child;
     n.source_line = buf ? buf->line_of(open_pos) : 0;
     std::ostringstream oss;
-    cap(oss);
+    cap(oss, capture_kind::brace);
     n.expr_text = oss.str();
     return n;
 }
@@ -201,7 +201,7 @@ ccx_attr parse_attr(scanner& s, const brace_capture_fn& cap) {
     } else if (s.peek() == '{') {
         s.advance(); // past {
         std::ostringstream oss;
-        cap(oss);
+        cap(oss, capture_kind::brace);
         a.value_cpp = oss.str();
         a.is_literal = false;
     } else {
@@ -210,30 +210,35 @@ ccx_attr parse_attr(scanner& s, const brace_capture_fn& cap) {
     return a;
 }
 
-std::string normalize_text(const std::string& raw) {
-    bool all_ws = true;
-    for (char c : raw) if (!scanner::is_whitespace(c)) { all_ws = false; break; }
-    if (all_ws) return {};
+bool is_all_whitespace(const std::string& raw) {
+    for (char c : raw) if (!scanner::is_whitespace(c)) return false;
+    return true;
+}
 
+struct trim_info { size_t pos; bool has_newline; };
+
+trim_info trim_leading_ws(const std::string& raw) {
     size_t i = 0;
-    bool leading_newline = false;
+    bool has_nl = false;
     while (i < raw.size() && scanner::is_whitespace(raw[i])) {
-        if (raw[i] == '\n' || raw[i] == '\r') leading_newline = true;
-        i++;
+        if (raw[i] == '\n' || raw[i] == '\r') has_nl = true;
+        ++i;
     }
-    size_t start = leading_newline ? i : 0;
+    return {i, has_nl};
+}
 
+trim_info trim_trailing_ws(const std::string& raw, size_t from) {
     size_t j = raw.size();
-    bool trailing_newline = false;
-    while (j > start && scanner::is_whitespace(raw[j - 1])) {
-        if (raw[j - 1] == '\n' || raw[j - 1] == '\r') trailing_newline = true;
-        j--;
+    bool has_nl = false;
+    while (j > from && scanner::is_whitespace(raw[j - 1])) {
+        if (raw[j - 1] == '\n' || raw[j - 1] == '\r') has_nl = true;
+        --j;
     }
-    size_t end = trailing_newline ? j : raw.size();
+    return {j, has_nl};
+}
 
-    std::string inner = raw.substr(start, end - start);
-    if (!leading_newline && !trailing_newline) return inner;
-
+// Join non-empty lines with a single space, stripping per-line leading whitespace.
+std::string collapse_line_runs(const std::string& inner) {
     std::string out;
     size_t p = 0;
     bool first = true;
@@ -253,6 +258,17 @@ std::string normalize_text(const std::string& raw) {
         p = nl + 1;
     }
     return out;
+}
+
+std::string normalize_text(const std::string& raw) {
+    if (is_all_whitespace(raw)) return {};
+    auto [leading_start, leading_nl]  = trim_leading_ws(raw);
+    auto [trailing_end,  trailing_nl] = trim_trailing_ws(raw, leading_nl ? leading_start : 0);
+    size_t start = leading_nl  ? leading_start : 0;
+    size_t end   = trailing_nl ? trailing_end  : raw.size();
+    std::string inner = raw.substr(start, end - start);
+    if (!leading_nl && !trailing_nl) return inner;
+    return collapse_line_runs(inner);
 }
 
 std::string read_text_run(scanner& s, bool stop_at_rbrace) {

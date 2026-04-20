@@ -42,7 +42,12 @@ struct ccx_node {
     std::vector<ccx_node> children;
 };
 
-using brace_capture_fn = std::function<void(std::ostream& out)>;
+// Tells the capture callback which delimiter the caller has already consumed.
+// paren: caller advanced past '(' (if/for/while head), callback reads until matching ')'.
+// brace: caller advanced past '{' (attr value or child expr), callback reads until matching '}'.
+enum class capture_kind { paren, brace };
+
+using brace_capture_fn = std::function<void(std::ostream& out, capture_kind kind)>;
 
 // buf may be null; when provided, source_line fields in the returned tree are populated.
 ccx_node parse_element(scanner& s,

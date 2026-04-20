@@ -40,6 +40,11 @@ public:
 
     bool at_line_start() const;
 
+    // Character classifiers are ASCII-only. Non-ASCII bytes (e.g. UTF-8 code
+    // points in identifiers) are not recognised as identifier characters and
+    // will cause the scanner to emit spurious tokens. Weasel source files must
+    // use ASCII-only identifiers; UTF-8 is only valid inside string literals
+    // and comments.
     static bool is_ident_start(char c);
     static bool is_ident_cont(char c);
     static bool is_digit(char c);

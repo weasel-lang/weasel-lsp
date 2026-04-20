@@ -317,28 +317,11 @@ class driver {
                 });
             }
         }
-        brace_capture_fn cap_brace = [this](std::ostream &o) { this->capture_brace(o); };
-        // Attribute values and control-flow heads are captured via parenthesis/brace.
-        // ccx_parser uses the `cap` callback with the convention:
-        // after seeing `(` (for if/for/while head) or `{` (for attr/expr child),
-        // it advances past the opener and calls cap. We need two behaviors.
-        // Current parser usage:
-        //   parse_attr: advances past '{' then calls cap → brace capture
-        //   parse_if/for/while: advances past '(' then calls cap → paren capture
-        //   parse_brace_child: advances past '{' then calls cap → brace capture
-        // So `cap` must handle both. We distinguish by what char preceded —
-        // track that via a simple: at invocation time, inspect the scanner's
-        // prior char. If it's `(`, do paren capture; if `{`, do brace capture.
-        auto smart_cap = [this](std::ostream &o) {
-            // Look back one char to decide mode.
-            size_t p = this->s_.pos();
-            char prev_char = (p > 0) ? this->s_.text()[p - 1] : '\0';
-            if (prev_char == '(')
-                this->capture_paren(o);
-            else
-                this->capture_brace(o);
+        brace_capture_fn cap = [this](std::ostream &o, capture_kind k) {
+            if (k == capture_kind::paren) this->capture_paren(o);
+            else                          this->capture_brace(o);
         };
-        ccx_node root = parse_element(s_, components_, smart_cap, buf_);
+        ccx_node root = parse_element(s_, components_, cap, buf_);
         size_t cc_line_before_emit = counter_ ? counter_->line() : 0;
         emit(root, *out_, buf_ ? ccx_cc_line_begin : 0);
         size_t cc_line_after_emit = counter_ ? counter_->line() : 0;
