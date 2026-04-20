@@ -48,10 +48,18 @@ std::optional<json> read_message(std::istream& in) {
     }
 
     if (!got_length) return std::nullopt;
+    // Reject pathological sizes before allocating.
+    constexpr std::size_t max_message_size = 64u * 1024 * 1024; // 64 MiB
+    if (content_length > max_message_size) return std::nullopt;
 
     std::string body(content_length, '\0');
-    in.read(body.data(), static_cast<std::streamsize>(content_length));
-    if (!in) return std::nullopt;
+    std::size_t got = 0;
+    while (got < content_length) {
+        in.read(body.data() + got, static_cast<std::streamsize>(content_length - got));
+        if (in.gcount() <= 0) return std::nullopt;
+        got += static_cast<std::size_t>(in.gcount());
+        if (!in && got < content_length) return std::nullopt;
+    }
 
     try {
         return json::parse(body);

@@ -5,7 +5,7 @@
 #include <string>
 
 using weasel::compiler::transpile;
-using weasel::compiler::collect_components;
+using weasel::compiler::collect_component_infos;
 
 static std::string run(std::string_view src) {
     std::ostringstream oss;
@@ -32,10 +32,11 @@ TEST_CASE("component keyword rewrites to weasel::node") {
     CHECK(out.find("weasel::node foo(") != std::string::npos);
 }
 
-TEST_CASE("collect_components picks up declarations") {
-    auto set = collect_components("component alpha(int) {}\ncomponent beta(int){}\n");
-    CHECK(set.count("alpha") == 1);
-    CHECK(set.count("beta") == 1);
+TEST_CASE("collect_component_infos picks up declarations") {
+    auto v = collect_component_infos("component alpha(int) {}\ncomponent beta(int){}\n");
+    REQUIRE(v.size() == 2);
+    CHECK(v[0].name == "alpha");
+    CHECK(v[1].name == "beta");
 }
 
 TEST_CASE("self-closing html tag") {
@@ -81,13 +82,27 @@ TEST_CASE("for child lowered to fragment-building IIFE") {
         "    return <ul>{ for (int x : xs) { <li>{x}</li> } }</ul>;\n"
         "}\n";
     std::string out = run(src);
-    CHECK(out.find("weasel::node_list __w") != std::string::npos);
+    CHECK(out.find("weasel::node_list weasel_nodes_") != std::string::npos);
     CHECK(out.find("for (int x : xs)") != std::string::npos);
-    CHECK(out.find("weasel::fragment(std::move(__w))") != std::string::npos);
+    CHECK(out.find("weasel::fragment(std::move(weasel_nodes_))") != std::string::npos);
 }
 
 TEST_CASE("if-else child") {
     std::string src = "node f(bool b) { return <div>{ if (b) { <a>y</a> } else { <a>n</a> } }</div>; }\n";
     std::string out = run(src);
     CHECK(out.find("else {") != std::string::npos);
+}
+
+TEST_CASE("control characters in text node are hex-escaped") {
+    // \x01 (SOH) must not appear raw inside the generated C++ string literal.
+    std::string src = "node f() { return <p>hello\x01world</p>; }\n";
+    std::string out = run(src);
+    CHECK(out.find("\\x01") != std::string::npos);
+    CHECK(out.find('\x01') == std::string::npos);
+}
+
+TEST_CASE("embedded double-quote in text node is escaped") {
+    std::string src = "node f() { return <p>say \"hi\"</p>; }\n";
+    std::string out = run(src);
+    CHECK(out.find("\\\"hi\\\"") != std::string::npos);
 }

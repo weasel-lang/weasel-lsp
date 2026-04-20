@@ -5,7 +5,7 @@
 
 namespace weasel {
 
-void render(const node& n, std::ostream& out);
-std::string render_to_string(const node& n);
+void render(const node& n, std::ostream& out) noexcept;
+std::string render_to_string(const node& n) noexcept;
 
 } // namespace weasel

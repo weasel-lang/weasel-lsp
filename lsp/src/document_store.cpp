@@ -15,6 +15,8 @@ bool doc_state::position_in_ccx(size_t offset) const {
 }
 
 bool doc_state::position_in_ccx_expression(size_t offset) const {
+    // TODO: This is O(span_size) per call and is invoked on every completion/hover
+    // request. Cache a brace-depth map per span in refresh() for large files.
     for (const auto& span : ccx_spans) {
         if (offset < span.begin || offset >= span.end) continue;
         // Walk backwards from offset within the span. An unmatched '{' means

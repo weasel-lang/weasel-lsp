@@ -5,7 +5,6 @@
 #include <iosfwd>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <vector>
 
 namespace weasel::compiler {
@@ -48,7 +47,6 @@ struct transpile_result {
     std::vector<component_info> components;
 };
 
-std::unordered_set<std::string> collect_components(std::string_view src);
 std::vector<component_info> collect_component_infos(std::string_view src);
 
 // CLI-style transpile: writes to `out`, throws parse_error on failure.

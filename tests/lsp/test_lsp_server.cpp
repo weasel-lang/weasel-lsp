@@ -253,3 +253,19 @@ TEST_CASE("completion outside CCX is empty (v0.5)") {
     REQUIRE(!resp.is_null());
     CHECK(resp.at("result").at("items").empty());
 }
+
+TEST_CASE("malformed Content-Length is rejected without crashing") {
+    // Oversized Content-Length should return nullopt, not allocate/crash.
+    std::string raw = "Content-Length: 9999999999999\r\n\r\n";
+    std::istringstream iss(raw);
+    auto result = weasel::lsp::read_message(iss);
+    CHECK(!result.has_value());
+}
+
+TEST_CASE("Content-Length at 64MiB limit is rejected") {
+    // Exactly one byte over the 64 MiB cap.
+    std::string raw = "Content-Length: " + std::to_string(64u * 1024 * 1024 + 1) + "\r\n\r\n";
+    std::istringstream iss(raw);
+    auto result = weasel::lsp::read_message(iss);
+    CHECK(!result.has_value());
+}

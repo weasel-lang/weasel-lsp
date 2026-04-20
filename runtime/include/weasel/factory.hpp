@@ -16,6 +16,9 @@ inline node fragment(node_list children) {
     return fragment_node{std::move(children)};
 }
 
+// Precondition: `name` must be lowercase (HTML tag names are case-insensitive;
+// void-element detection normalises to lowercase at render time). Attribute
+// keys must match [A-Za-z_:][A-Za-z0-9_:.-]* — this is asserted in debug builds.
 inline node tag(std::string_view name,
                 attrs_t attrs = {},
                 node_list children = {}) {

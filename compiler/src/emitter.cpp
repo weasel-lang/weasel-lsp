@@ -1,4 +1,5 @@
 #include "weasel/compiler/emitter.hpp"
+#include <cstdio>
 #include <string>
 
 namespace weasel::compiler {
@@ -8,13 +9,24 @@ std::string cpp_escape(std::string_view s) {
     std::string out;
     out.reserve(s.size() + 2);
     for (char c : s) {
+        unsigned char uc = static_cast<unsigned char>(c);
         switch (c) {
         case '\\': out += "\\\\"; break;
         case '"':  out += "\\\""; break;
         case '\n': out += "\\n";  break;
         case '\r': out += "\\r";  break;
         case '\t': out += "\\t";  break;
-        default:   out += c;
+        default:
+            // UTF-8 bytes pass through as-is (byte-for-byte identity).
+            // Control characters that have no named escape get \xNN so they
+            // don't silently corrupt the generated C++ string literal.
+            if (uc < 0x20 || uc == 0x7f) {
+                char buf[5];
+                std::snprintf(buf, sizeof(buf), "\\x%02X", uc);
+                out += buf;
+            } else {
+                out += c;
+            }
         }
     }
     return out;
@@ -114,15 +126,15 @@ void emit_if(const ccx_node& n, emit_state& st) {
 }
 
 void emit_for(const ccx_node& n, emit_state& st) {
-    st.out << "[&]() -> weasel::node { weasel::node_list __w; for (" << n.head_cpp << ") { __w.push_back(";
+    st.out << "[&]() -> weasel::node { weasel::node_list weasel_nodes_; for (" << n.head_cpp << ") { weasel_nodes_.push_back(";
     emit_body(n.children, st);
-    st.out << "); } return weasel::fragment(std::move(__w)); }()";
+    st.out << "); } return weasel::fragment(std::move(weasel_nodes_)); }()";
 }
 
 void emit_while(const ccx_node& n, emit_state& st) {
-    st.out << "[&]() -> weasel::node { weasel::node_list __w; while (" << n.head_cpp << ") { __w.push_back(";
+    st.out << "[&]() -> weasel::node { weasel::node_list weasel_nodes_; while (" << n.head_cpp << ") { weasel_nodes_.push_back(";
     emit_body(n.children, st);
-    st.out << "); } return weasel::fragment(std::move(__w)); }()";
+    st.out << "); } return weasel::fragment(std::move(weasel_nodes_)); }()";
 }
 
 void emit_node(const ccx_node& n, emit_state& st) {

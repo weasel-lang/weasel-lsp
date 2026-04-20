@@ -7,14 +7,17 @@
 namespace weasel {
 
 struct node;
-using node_list = std::vector<node>;   // vector<incomplete T> is valid in C++17
+// node_list uses node before the full definition of node is available;
+// std::vector<T> may be instantiated with an incomplete T in C++17 and later.
+using node_list = std::vector<node>;
 using attrs_t   = std::vector<std::pair<std::string, std::string>>;
 
 struct text_node {
     std::string content;
 };
 
-// Emits html verbatim — caller guarantees the content is safe HTML.
+// Emits html verbatim — caller is responsible for HTML safety, correct nesting,
+// and encoding. Do not use as a performance shortcut for escaped content.
 struct raw_node {
     std::string html;
 };

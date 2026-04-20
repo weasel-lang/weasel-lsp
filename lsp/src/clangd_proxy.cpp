@@ -45,7 +45,9 @@ std::optional<json> read_framed_from_fd(int fd) {
             strncasecmp(line.data(), cl.data(), cl.size()) == 0) {
             size_t i = cl.size();
             while (i < line.size() && (line[i] == ' ' || line[i] == '\t')) ++i;
-            content_length = std::strtoull(line.c_str() + i, nullptr, 10);
+            constexpr size_t max_message_size = 64u * 1024 * 1024; // 64 MiB
+            size_t v = std::strtoull(line.c_str() + i, nullptr, 10);
+            content_length = (v <= max_message_size) ? v : 0;
         }
     }
     if (content_length == 0) return json::object();
@@ -77,6 +79,17 @@ std::string find_clangd_path() {
     return "clangd";
 }
 
+// When exe contains a '/' it's an absolute or relative path — we can probe
+// it directly. Bare names rely on PATH lookup done by posix_spawnp, so we
+// skip the probe (access() wouldn't search PATH).
+void maybe_warn_clangd_not_found(const std::string& exe) {
+    if (exe.find('/') == std::string::npos) return;
+    if (::access(exe.c_str(), X_OK) != 0) {
+        log() << "weasel-lsp: clangd not found or not executable at '"
+              << exe << "'; will attempt spawn anyway\n";
+    }
+}
+
 } // namespace
 
 std::unique_ptr<clangd_proxy> clangd_proxy::spawn(std::string_view compile_commands_dir) {
@@ -103,6 +116,7 @@ std::unique_ptr<clangd_proxy> clangd_proxy::spawn(std::string_view compile_comma
     posix_spawn_file_actions_addclose(&actions, from_child[1]);
 
     std::string exe = find_clangd_path();
+    maybe_warn_clangd_not_found(exe);
     std::vector<std::string> args_storage;
     args_storage.push_back(exe);
     args_storage.push_back("--background-index=false");
@@ -230,7 +244,10 @@ void clangd_proxy::reader_loop() {
         // Response (has id AND no method, or has id with result/error only)
         if (msg->contains("id") && !msg->contains("method")) {
             std::int64_t id = 0;
-            try { id = msg->at("id").get<std::int64_t>(); } catch (...) { continue; }
+            try { id = msg->at("id").get<std::int64_t>(); } catch (...) {
+                log() << "weasel-lsp: unexpected id type in clangd response (expected integer); dropping\n";
+                continue;
+            }
             response_cb cb;
             {
                 std::lock_guard<std::mutex> lk(pending_mutex_);

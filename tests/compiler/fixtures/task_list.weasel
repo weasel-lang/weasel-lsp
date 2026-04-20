@@ -44,7 +44,7 @@ component task_item(const task_item_props& p) {
             {
                 if (show && !p.item.assignee.empty()) {
                     <p class="assignee">
-                        Assigned to: <badge label={p.item.assignee} color="blue" />
+                        Assigned To <badge label={p.item.assignee} color="blue" />
                     </p>
                 }
             }

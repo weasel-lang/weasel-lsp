@@ -2,7 +2,6 @@
 #include "weasel/compiler/transpiler.hpp"
 
 using weasel::compiler::collect_component_infos;
-using weasel::compiler::collect_components;
 
 TEST_CASE("collect_component_infos: single component with position") {
     std::string src = "component alpha(int x) {}\n";
@@ -64,12 +63,12 @@ TEST_CASE("collect_component_infos: ignores 'component' without following '('") 
     CHECK(v[0].name == "real");
 }
 
-TEST_CASE("collect_components wrapper still works") {
-    auto set = collect_components(
+TEST_CASE("collect_component_infos: name set derivable from infos") {
+    auto v = collect_component_infos(
         "component alpha(int) {}\ncomponent beta(int){}\n");
-    CHECK(set.count("alpha") == 1);
-    CHECK(set.count("beta") == 1);
-    CHECK(set.size() == 2);
+    REQUIRE(v.size() == 2);
+    CHECK(v[0].name == "alpha");
+    CHECK(v[1].name == "beta");
 }
 
 TEST_CASE("collect_component_infos: multiple components") {

@@ -1,4 +1,7 @@
 #include "weasel/renderer.hpp"
+#include <algorithm>
+#include <cassert>
+#include <cctype>
 #include <ostream>
 #include <sstream>
 #include <unordered_set>
@@ -38,9 +41,27 @@ void escape_attr(std::string_view in, std::ostream& out) {
             case '>':  out << "&gt;";   break;
             case '"':  out << "&quot;"; break;
             case '\'': out << "&#39;";  break;
+            case '\n': out << "&#10;";  break;
+            case '\r': out << "&#13;";  break;
+            case '\t': out << "&#9;";   break;
             default:   out << c;
         }
     }
+}
+
+bool is_valid_attr_name(std::string_view k) {
+    if (k.empty()) return false;
+    auto first_ok = [](char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == ':';
+    };
+    auto rest_ok = [](char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+               (c >= '0' && c <= '9') || c == '_' || c == ':' || c == '.' || c == '-';
+    };
+    if (!first_ok(k[0])) return false;
+    for (size_t i = 1; i < k.size(); ++i)
+        if (!rest_ok(k[i])) return false;
+    return true;
 }
 
 void do_render(const node& n, std::ostream& out) {
@@ -55,11 +76,16 @@ void do_render(const node& n, std::ostream& out) {
         [&](const element_node& e) {
             out << '<' << e.tag;
             for (const auto& [k, v] : e.attrs) {
+                assert(is_valid_attr_name(k) && "attribute name must match [A-Za-z_:][A-Za-z0-9_:.-]*");
                 out << ' ' << k << "=\"";
                 escape_attr(v, out);
                 out << '"';
             }
-            if (void_elements.count(e.tag)) {
+            // Normalize to lowercase for case-insensitive void-element lookup.
+            std::string lower_tag(e.tag.size(), '\0');
+            std::transform(e.tag.begin(), e.tag.end(), lower_tag.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (void_elements.count(lower_tag)) {
                 out << '>';
             } else {
                 out << '>';
@@ -77,11 +103,11 @@ void do_render(const node& n, std::ostream& out) {
 
 } // anonymous namespace
 
-void render(const node& n, std::ostream& out) {
+void render(const node& n, std::ostream& out) noexcept {
     do_render(n, out);
 }
 
-std::string render_to_string(const node& n) {
+std::string render_to_string(const node& n) noexcept {
     std::ostringstream oss;
     do_render(n, oss);
     return oss.str();
