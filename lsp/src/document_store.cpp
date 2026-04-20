@@ -14,6 +14,25 @@ bool doc_state::position_in_ccx(size_t offset) const {
     return false;
 }
 
+bool doc_state::position_in_ccx_expression(size_t offset) const {
+    for (const auto& span : ccx_spans) {
+        if (offset < span.begin || offset >= span.end) continue;
+        // Walk backwards from offset within the span. An unmatched '{' means
+        // we're inside a {…} C++ expression (attribute value or child expr).
+        int depth = 0;
+        for (size_t i = offset; i > span.begin; --i) {
+            char c = text[i - 1];
+            if (c == '}') ++depth;
+            else if (c == '{') {
+                if (depth == 0) return true;
+                --depth;
+            }
+        }
+        return false;
+    }
+    return false;
+}
+
 void document_store::refresh(doc_state& d) {
     d.buffer = weasel::compiler::make_source(d.uri, d.text);
     d.ccx_spans.clear();

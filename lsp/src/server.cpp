@@ -118,6 +118,81 @@ std::optional<int> remap_ccx_hover_column(const doc_state& d, int weasel_line_0,
     return std::nullopt;
 }
 
+// For completion inside a CCX expression {…}, remap the .weasel column to .cc.
+// Handles '.' (member access) and '::' (scope resolution) trigger characters by
+// finding the identifier before the trigger in the .weasel line and locating it
+// in the corresponding .cc line. Falls back to hover-style identifier remapping.
+std::optional<int> remap_ccx_completion_column(const doc_state& d, int weasel_line_0,
+                                               int weasel_char_0) {
+    auto cc_line = get_text_line(d.cc_text, weasel_line_0);
+    bool has_content = false;
+    for (char c : cc_line) {
+        if (c != ' ' && c != '\t') { has_content = true; break; }
+    }
+    if (!has_content) return std::nullopt;
+
+    auto weasel_line = get_text_line(d.text, weasel_line_0);
+    if (weasel_char_0 < 0) return std::nullopt;
+
+    auto is_ident = [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+               (c >= '0' && c <= '9') || c == '_';
+    };
+
+    size_t cur = std::min((size_t)weasel_char_0, weasel_line.size());
+
+    // Detect trigger character(s) immediately before the cursor.
+    size_t trigger_start = std::string_view::npos;
+    size_t trigger_len = 0;
+    if (cur >= 1 && weasel_line[cur - 1] == '.') {
+        trigger_start = cur - 1;
+        trigger_len = 1;
+    } else if (cur >= 2 && weasel_line[cur - 1] == ':' && weasel_line[cur - 2] == ':') {
+        trigger_start = cur - 2;
+        trigger_len = 2;
+    }
+
+    if (trigger_start != std::string_view::npos && trigger_start > 0 &&
+        is_ident(weasel_line[trigger_start - 1])) {
+        size_t id_end = trigger_start;
+        size_t id_start = id_end;
+        while (id_start > 0 && is_ident(weasel_line[id_start - 1])) --id_start;
+        std::string_view id_text = weasel_line.substr(id_start, id_end - id_start);
+        if (!id_text.empty()) {
+            size_t search_from = 0;
+            while (search_from < cc_line.size()) {
+                auto pos = cc_line.find(id_text, search_from);
+                if (pos == std::string_view::npos) break;
+                bool left_ok  = (pos == 0) || !is_ident(cc_line[pos - 1]);
+                bool right_ok = (pos + id_text.size() >= cc_line.size()) ||
+                                !is_ident(cc_line[pos + id_text.size()]);
+                if (left_ok && right_ok)
+                    return static_cast<int>(pos + id_text.size() + trigger_len);
+                search_from = pos + 1;
+            }
+        }
+    }
+
+    // Fallback: identifier-based remapping (same as hover).
+    return remap_ccx_hover_column(d, weasel_line_0, weasel_char_0);
+}
+
+// Recursively replace every occurrence of URI `from` — whether a string value
+// or an object key (WorkspaceEdit.changes) — with `to`.
+void remap_uris_recursive(json& j, const std::string& from, const std::string& to) {
+    if (j.is_string()) {
+        if (j.get<std::string>() == from) j = to;
+    } else if (j.is_object()) {
+        if (j.contains(from)) {
+            j[to] = std::move(j[from]);
+            j.erase(from);
+        }
+        for (auto& [k, v] : j.items()) remap_uris_recursive(v, from, to);
+    } else if (j.is_array()) {
+        for (auto& el : j) remap_uris_recursive(el, from, to);
+    }
+}
+
 } // namespace
 
 server::server(std::istream& in, std::ostream& out) : in_(in), out_(out) {}
@@ -162,20 +237,21 @@ void server::handle_request(const json& id, const std::string& method, const jso
         write_to_editor(make_response(id, nullptr));
         return;
     }
-    if (method == "textDocument/definition" ||
-        method == "textDocument/completion" ||
-        method == "textDocument/hover") {
-        if (forward_request_to_clangd(id, method, params)) return;
-        if (method == "textDocument/definition") {
-            write_to_editor(make_response(id, on_definition(params)));
-            return;
-        }
-        if (method == "textDocument/completion") {
-            write_to_editor(make_response(id, on_completion(params)));
-            return;
-        }
-        // hover: v0.5 has no handler.
+    // $/cancelRequest: relay to clangd and acknowledge with null result.
+    if (method == "$/cancelRequest") {
+        if (clangd_) clangd_->send_notification("$/cancelRequest", params);
         write_to_editor(make_response(id, nullptr));
+        return;
+    }
+    // Try clangd proxy for all textDocument (and future workspace) methods.
+    if (forward_request_to_clangd(id, method, params)) return;
+    // Native fallbacks used when clangd is absent or method needs local handling.
+    if (method == "textDocument/definition") {
+        write_to_editor(make_response(id, on_definition(params)));
+        return;
+    }
+    if (method == "textDocument/completion") {
+        write_to_editor(make_response(id, on_completion(params)));
         return;
     }
     write_to_editor(make_error_response(id, -32601, "method not found"));
@@ -188,6 +264,11 @@ void server::handle_notification(const std::string& method, const json& params) 
     if (method == "textDocument/didChange") { on_did_change(params); return; }
     if (method == "textDocument/didSave")   { on_did_save(params);   return; }
     if (method == "textDocument/didClose")  { on_did_close(params);  return; }
+    if (method == "$/cancelRequest") {
+        if (clangd_) clangd_->send_notification(method, params);
+        return;
+    }
+    // Silently drop other notifications (workspace/didChangeConfiguration, etc.).
 }
 
 json server::on_initialize(const json& params) {
@@ -247,6 +328,19 @@ json server::on_initialize(const json& params) {
         {"hoverProvider", clangd_ != nullptr},
         {"positionEncoding", "utf-8"},
     };
+    if (clangd_) {
+        capabilities["signatureHelpProvider"] = {
+            {"triggerCharacters", json::array({"(", ","})},
+        };
+        capabilities["referencesProvider"]        = true;
+        capabilities["documentHighlightProvider"] = true;
+        capabilities["documentSymbolProvider"]    = true;
+        capabilities["codeActionProvider"]        = true;
+        capabilities["renameProvider"]            = true;
+        capabilities["inlayHintProvider"]         = true;
+        capabilities["typeDefinitionProvider"]    = true;
+        capabilities["implementationProvider"]    = true;
+    }
     return {
         {"capabilities", capabilities},
         {"serverInfo", {{"name", "weasel-lsp"}, {"version", "1.0.0"}}},
@@ -440,56 +534,66 @@ void server::on_clangd_notification(const std::string& method, const json& param
 bool server::forward_request_to_clangd(const json& id, const std::string& method,
                                        const json& params) {
     if (!clangd_) return false;
+    if (!params.contains("textDocument")) return false;
     std::string uri = params.at("textDocument").at("uri").get<std::string>();
     if (!is_weasel_uri(uri)) return false;
-    int line = params.at("position").at("line").get<int>();
-    int character = params.at("position").at("character").get<int>();
 
-    // Attempt v0.5 handlers first for CCX-aware behavior.
     const doc_state* d = docs_.find(uri);
     if (!d) return false;
 
-    // If cursor is inside a CCX region, v0.5 handlers know what to do; skip clangd.
-    size_t offset = offset_from_lsp_position(d->buffer, line, character);
-    bool in_ccx = d->position_in_ccx(offset);
+    // Position-bearing requests may need CCX-aware routing.
+    if (params.contains("position")) {
+        int line      = params.at("position").at("line").get<int>();
+        int character = params.at("position").at("character").get<int>();
+        size_t offset = offset_from_lsp_position(d->buffer, line, character);
+        bool in_ccx   = d->position_in_ccx(offset);
 
-    if (method == "textDocument/definition" && !in_ccx) {
-        // Try component go-to first anyway (cheap). Otherwise forward to clangd.
-        json local = build_definition(*d, line, character);
-        if (!local.is_null()) {
-            write_to_editor(make_response(id, local));
+        if (method == "textDocument/definition" && !in_ccx) {
+            json local = build_definition(*d, line, character);
+            if (!local.is_null()) {
+                write_to_editor(make_response(id, local));
+                return true;
+            }
+            // fall through to clangd
+        } else if (method == "textDocument/definition" && in_ccx) {
+            return false;  // component go-to only; native handler covers it
+        } else if (method == "textDocument/completion" && in_ccx) {
+            if (!d->position_in_ccx_expression(offset))
+                return false;  // markup position; Weasel handles it
+            auto remapped_char = remap_ccx_completion_column(*d, line, character);
+            if (!remapped_char) return false;
+            std::string cc_uri = derive_cc_uri(uri);
+            json translated = params;
+            translated["textDocument"]["uri"]      = cc_uri;
+            translated["position"]["character"]    = *remapped_char;
+            json cap_id = id;
+            clangd_->send_request(method, translated,
+                [this, cap_id](const json& result, const json& err) {
+                    write_to_editor(make_response(cap_id, err.is_null() ? result : json(nullptr)));
+                });
+            return true;
+        } else if ((method == "textDocument/hover" ||
+                    method == "textDocument/signatureHelp") && in_ccx) {
+            auto remapped_char = remap_ccx_hover_column(*d, line, character);
+            if (!remapped_char) return false;
+            std::string cc_uri = derive_cc_uri(uri);
+            json translated = params;
+            translated["textDocument"]["uri"]   = cc_uri;
+            translated["position"]["character"] = *remapped_char;
+            json cap_id = id;
+            clangd_->send_request(method, translated,
+                [this, cap_id](const json& result, const json& err) {
+                    write_to_editor(make_response(cap_id, err.is_null() ? result : json(nullptr)));
+                });
             return true;
         }
-        // fall through to clangd
-    } else if (method == "textDocument/completion" && in_ccx) {
-        // CCX completion is handled entirely by v0.5.
-        return false;
-    } else if (method == "textDocument/definition" && in_ccx) {
-        // CCX: components only. Don't proxy.
-        return false;
-    } else if (method == "textDocument/hover" && in_ccx) {
-        // C++ expressions inside CCX {…} blocks: try to remap the column by
-        // finding the identifier under the cursor in the corresponding .cc line.
-        auto remapped_char = remap_ccx_hover_column(*d, line, character);
-        if (!remapped_char) return false;  // blank .cc line or no identifier match
-        std::string cc_uri = derive_cc_uri(uri);
-        json translated = params;
-        translated["textDocument"]["uri"] = cc_uri;
-        translated["position"]["character"] = *remapped_char;
-        json cap_id = id;
-        clangd_->send_request(method, translated,
-            [this, cap_id](const json& result, const json& err) {
-                write_to_editor(make_response(cap_id, err.is_null() ? result : json(nullptr)));
-            });
-        return true;
     }
 
-    // For completion outside CCX, definition outside CCX (non-component), and
-    // hover: translate position and forward to clangd on the .cc URI.
+    // Generic passthrough: translate URI, forward, remap URIs in response.
+    // Covers completion/hover/references/rename/codeAction/inlayHints/etc.
     std::string cc_uri = derive_cc_uri(uri);
     json translated = params;
     translated["textDocument"]["uri"] = cc_uri;
-    // line/column alignment is preserved for cpp_passthrough spans.
 
     json cap_id = id;
     clangd_->send_request(method, translated,
@@ -498,19 +602,8 @@ bool server::forward_request_to_clangd(const json& id, const std::string& method
                 write_to_editor(make_response(cap_id, nullptr));
                 return;
             }
-            // Remap locations pointing at our generated .cc back to the .weasel.
-            // Only rewrite the exact cc_uri we sent; leave other files (headers,
-            // other generated files) untouched.
-            auto remap = [&uri, &cc_uri](json& loc) {
-                if (loc.is_object() && loc.value("uri", "") == cc_uri)
-                    loc["uri"] = uri;
-            };
             json out = result;
-            if (out.is_array()) {
-                for (auto& el : out) remap(el);
-            } else if (out.is_object()) {
-                remap(out);
-            }
+            remap_uris_recursive(out, cc_uri, uri);
             write_to_editor(make_response(cap_id, out));
         });
     return true;

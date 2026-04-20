@@ -194,6 +194,40 @@ TEST_CASE("textDocument/completion offers CCX tags and components inside CCX") {
     CHECK(saw_mycard);
 }
 
+TEST_CASE("completion inside CCX expression {…} returns empty not HTML tags") {
+    // Without clangd, expression positions should yield nothing (not spurious HTML).
+    // Source line 0: node f(int x) { return <div class={x}>hi</div>; }
+    // The {x} attribute expression starts at column 34 (0-based).
+    auto msgs = drive({
+        make_request(1, "initialize", json::object()),
+        make_notif("textDocument/didOpen", {
+            {"textDocument", {
+                {"uri", "file:///tmp/expr.weasel"},
+                {"languageId", "weasel"},
+                {"version", 1},
+                {"text", "node f(int x) { return <div class={x}>hi</div>; }\n"},
+            }},
+        }),
+        make_request(2, "textDocument/completion", {
+            {"textDocument", {{"uri", "file:///tmp/expr.weasel"}}},
+            {"position", {{"line", 0}, {"character", 35}}},  // on 'x' inside {x}
+        }),
+        make_request(3, "shutdown"),
+        make_notif("exit", json::object()),
+    });
+    json resp;
+    for (const auto& m : msgs) {
+        if (m.value("id", -1) == 2) resp = m;
+    }
+    REQUIRE(!resp.is_null());
+    const auto& items = resp.at("result").at("items");
+    bool saw_html_tag = false;
+    for (const auto& it : items) {
+        if (it.value("detail", "") == "HTML element") saw_html_tag = true;
+    }
+    CHECK(!saw_html_tag);
+}
+
 TEST_CASE("completion outside CCX is empty (v0.5)") {
     auto msgs = drive({
         make_request(1, "initialize", json::object()),

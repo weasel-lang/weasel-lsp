@@ -38,6 +38,10 @@ json build_completion(const doc_state& d, int line, int character) {
         // v0.5: no C++ completion of our own; clangd will handle .cc.
         return {{"isIncomplete", false}, {"items", items}};
     }
+    if (d.position_in_ccx_expression(offset)) {
+        // Inside a {…} C++ expression: clangd handles this; return nothing.
+        return {{"isIncomplete", false}, {"items", items}};
+    }
 
     for (auto tag : html_tags) {
         items.push_back({

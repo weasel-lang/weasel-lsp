@@ -31,6 +31,9 @@ struct doc_state {
 
     // Byte offset <-> (line, column) mapping is via `buffer`.
     bool position_in_ccx(size_t offset) const;
+    // Returns true if offset is inside a {…} C++ expression within any CCX span
+    // (attribute value or child expression), rather than in a markup context.
+    bool position_in_ccx_expression(size_t offset) const;
 };
 
 class document_store {
