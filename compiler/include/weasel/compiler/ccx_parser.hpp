@@ -1,4 +1,5 @@
 #pragma once
+#include "weasel/compiler/source.hpp"
 #include <functional>
 #include <ostream>
 #include <string>
@@ -20,6 +21,8 @@ struct ccx_node {
     enum class kind { element, text, expr_child, if_chain, for_loop, while_loop };
     kind k = kind::text;
 
+    size_t source_line = 0;  // 1-based .weasel line; 0 = not recorded
+
     std::string tag_name;
     bool is_component = false;
     std::vector<ccx_attr> attrs;
@@ -32,6 +35,7 @@ struct ccx_node {
         std::string cond_cpp;
         std::vector<ccx_node> body;
         bool is_else = false;
+        size_t source_line = 0;
     };
     std::vector<if_branch> branches;
 
@@ -40,8 +44,10 @@ struct ccx_node {
 
 using brace_capture_fn = std::function<void(std::ostream& out)>;
 
+// buf may be null; when provided, source_line fields in the returned tree are populated.
 ccx_node parse_element(scanner& s,
                        const std::unordered_set<std::string>& components,
-                       const brace_capture_fn& capture);
+                       const brace_capture_fn& capture,
+                       const source_buffer* buf = nullptr);
 
 } // namespace weasel::compiler

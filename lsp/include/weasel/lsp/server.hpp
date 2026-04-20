@@ -61,6 +61,12 @@ class server {
     std::unique_ptr<clangd_proxy> clangd_;
     // Map .cc URI -> .weasel URI, for remapping clangd diagnostics.
     std::unordered_map<std::string, std::string> cc_to_weasel_uri_;
+
+    // True once we have sent "initialized" to clangd. didOpen/didChange
+    // notifications captured before that point are held here and flushed
+    // immediately after "initialized" is sent, preserving LSP handshake order.
+    bool clangd_initialized_ = false;
+    std::vector<std::string> clangd_pending_open_uris_;
 };
 
 } // namespace weasel::lsp

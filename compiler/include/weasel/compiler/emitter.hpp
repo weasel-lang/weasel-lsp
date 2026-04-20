@@ -4,6 +4,7 @@
 
 namespace weasel::compiler {
 
-void emit(const ccx_node& n, std::ostream& out);
+// start_line: 1-based output line we are currently on; 0 disables line-advance.
+void emit(const ccx_node& n, std::ostream& out, size_t start_line = 0);
 
 } // namespace weasel::compiler

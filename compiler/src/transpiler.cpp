@@ -338,23 +338,25 @@ class driver {
             else
                 this->capture_brace(o);
         };
-        ccx_node root = parse_element(s_, components_, smart_cap);
-        emit(root, *out_);
+        ccx_node root = parse_element(s_, components_, smart_cap, buf_);
+        size_t cc_line_before_emit = counter_ ? counter_->line() : 0;
+        emit(root, *out_, buf_ ? ccx_cc_line_begin : 0);
+        size_t cc_line_after_emit = counter_ ? counter_->line() : 0;
+        size_t emitted_newlines = cc_line_after_emit - cc_line_before_emit;
         if (opts_ && opts_->on_ccx_span)
             opts_->on_ccx_span(ccx_start, s_.pos());
         // After emission, we're after a closed C++ expression.
         prev_ = prev_tok::rparen;
-        // Line-preservation: pad output with newlines if the JSX source span
-        // contained more newlines than the emitted replacement.
+        // Line-preservation: pad output with newlines so that the total
+        // newlines emitted for this CCX region equals the number of newlines
+        // consumed in the source. The emitter may have already emitted some.
         size_t consumed_lines = 0;
         for (size_t i = ccx_start; i < s_.pos(); ++i) {
             if (s_.text()[i] == '\n')
                 consumed_lines++;
         }
-        // We haven't counted newlines in the emitted text, so as a simple
-        // strategy pad with `consumed_lines` newlines. This may over-pad if
-        // the emitter inserted newlines itself (it does not currently).
-        for (size_t i = 0; i < consumed_lines; ++i)
+        size_t pad = consumed_lines > emitted_newlines ? consumed_lines - emitted_newlines : 0;
+        for (size_t i = 0; i < pad; ++i)
             *out_ << '\n';
 
         if (line_map_ && counter_ && buf_) {

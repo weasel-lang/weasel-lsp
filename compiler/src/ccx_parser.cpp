@@ -34,17 +34,18 @@ std::vector<ccx_node> parse_children(scanner& s,
                                      const std::unordered_set<std::string>& comps,
                                      const brace_capture_fn& cap,
                                      bool terminator_is_rbrace,
-                                     std::string_view element_name);
+                                     std::string_view element_name,
+                                     const source_buffer* buf);
 
 ccx_node parse_block_body(scanner& s,
                           const std::unordered_set<std::string>& comps,
                           const brace_capture_fn& cap,
-                          std::vector<ccx_node>& out_children) {
-    // Precondition: we're about to consume '{'
+                          std::vector<ccx_node>& out_children,
+                          const source_buffer* buf) {
     skip_ws(s);
     if (s.peek() != '{') fail(s, "expected '{' for block body");
     s.advance();
-    out_children = parse_children(s, comps, cap, /*terminator_is_rbrace=*/true, /*element_name=*/{});
+    out_children = parse_children(s, comps, cap, /*terminator_is_rbrace=*/true, /*element_name=*/{}, buf);
     if (s.peek() != '}') fail(s, "expected '}' closing block body");
     s.advance();
     return {};
@@ -52,10 +53,13 @@ ccx_node parse_block_body(scanner& s,
 
 ccx_node parse_if_child(scanner& s,
                         const std::unordered_set<std::string>& comps,
-                        const brace_capture_fn& cap) {
+                        const brace_capture_fn& cap,
+                        const source_buffer* buf,
+                        size_t if_kw_pos) {
     ccx_node n;
     n.k = ccx_node::kind::if_chain;
-    // Keyword 'if' already consumed by caller.
+    n.source_line = buf ? buf->line_of(if_kw_pos) : 0;
+
     auto parse_cond_and_body = [&](ccx_node::if_branch& br) {
         skip_ws(s);
         if (s.peek() != '(') fail(s, "expected '(' after 'if'");
@@ -64,12 +68,13 @@ ccx_node parse_if_child(scanner& s,
         cap(cond);
         br.cond_cpp = cond.str();
         std::vector<ccx_node> body;
-        parse_block_body(s, comps, cap, body);
+        parse_block_body(s, comps, cap, body, buf);
         br.body = std::move(body);
     };
 
     {
         ccx_node::if_branch first;
+        first.source_line = n.source_line;
         parse_cond_and_body(first);
         n.branches.push_back(std::move(first));
     }
@@ -78,13 +83,16 @@ ccx_node parse_if_child(scanner& s,
         size_t save = s.pos();
         skip_ws(s);
         if (!scanner::is_ident_start(s.peek())) { s.set_pos(save); break; }
+        size_t else_pos = s.pos();
         auto id = s.read_identifier();
         if (id != "else") { s.set_pos(save); break; }
+        size_t else_line = buf ? buf->line_of(else_pos) : 0;
         skip_ws(s);
         if (scanner::is_ident_start(s.peek())) {
             auto id2 = s.read_identifier();
             if (id2 != "if") fail(s, "expected 'if' or '{' after 'else'");
             ccx_node::if_branch br;
+            br.source_line = else_line;
             parse_cond_and_body(br);
             n.branches.push_back(std::move(br));
             continue;
@@ -92,8 +100,9 @@ ccx_node parse_if_child(scanner& s,
         if (s.peek() != '{') fail(s, "expected '{' or 'if' after 'else'");
         ccx_node::if_branch else_br;
         else_br.is_else = true;
+        else_br.source_line = else_line;
         std::vector<ccx_node> body;
-        parse_block_body(s, comps, cap, body);
+        parse_block_body(s, comps, cap, body, buf);
         else_br.body = std::move(body);
         n.branches.push_back(std::move(else_br));
         break;
@@ -103,9 +112,12 @@ ccx_node parse_if_child(scanner& s,
 
 ccx_node parse_for_child(scanner& s,
                          const std::unordered_set<std::string>& comps,
-                         const brace_capture_fn& cap) {
+                         const brace_capture_fn& cap,
+                         const source_buffer* buf,
+                         size_t kw_pos) {
     ccx_node n;
     n.k = ccx_node::kind::for_loop;
+    n.source_line = buf ? buf->line_of(kw_pos) : 0;
     skip_ws(s);
     if (s.peek() != '(') fail(s, "expected '(' after 'for'");
     s.advance();
@@ -113,16 +125,19 @@ ccx_node parse_for_child(scanner& s,
     cap(head);
     n.head_cpp = head.str();
     std::vector<ccx_node> body;
-    parse_block_body(s, comps, cap, body);
+    parse_block_body(s, comps, cap, body, buf);
     n.children = std::move(body);
     return n;
 }
 
 ccx_node parse_while_child(scanner& s,
                            const std::unordered_set<std::string>& comps,
-                           const brace_capture_fn& cap) {
+                           const brace_capture_fn& cap,
+                           const source_buffer* buf,
+                           size_t kw_pos) {
     ccx_node n;
     n.k = ccx_node::kind::while_loop;
+    n.source_line = buf ? buf->line_of(kw_pos) : 0;
     skip_ws(s);
     if (s.peek() != '(') fail(s, "expected '(' after 'while'");
     s.advance();
@@ -130,25 +145,28 @@ ccx_node parse_while_child(scanner& s,
     cap(head);
     n.head_cpp = head.str();
     std::vector<ccx_node> body;
-    parse_block_body(s, comps, cap, body);
+    parse_block_body(s, comps, cap, body, buf);
     n.children = std::move(body);
     return n;
 }
 
 ccx_node parse_brace_child(scanner& s,
                            const std::unordered_set<std::string>& comps,
-                           const brace_capture_fn& cap) {
+                           const brace_capture_fn& cap,
+                           const source_buffer* buf) {
     // Precondition: s.peek() == '{'
+    size_t open_pos = s.pos();
     s.advance();
     size_t after_open = s.pos();
     skip_ws(s);
     if (scanner::is_ident_start(s.peek())) {
+        size_t kw_pos = s.pos();
         auto id = s.read_identifier();
         ccx_node result;
         bool handled = false;
-        if (id == "if")         { result = parse_if_child(s, comps, cap); handled = true; }
-        else if (id == "for")   { result = parse_for_child(s, comps, cap); handled = true; }
-        else if (id == "while") { result = parse_while_child(s, comps, cap); handled = true; }
+        if (id == "if")         { result = parse_if_child(s, comps, cap, buf, kw_pos); handled = true; }
+        else if (id == "for")   { result = parse_for_child(s, comps, cap, buf, kw_pos); handled = true; }
+        else if (id == "while") { result = parse_while_child(s, comps, cap, buf, kw_pos); handled = true; }
         if (handled) {
             skip_ws(s);
             if (s.peek() != '}') fail(s, "expected '}' after control-flow block");
@@ -157,10 +175,11 @@ ccx_node parse_brace_child(scanner& s,
         }
         s.set_pos(after_open);
     }
-    std::ostringstream oss;
-    cap(oss);
     ccx_node n;
     n.k = ccx_node::kind::expr_child;
+    n.source_line = buf ? buf->line_of(open_pos) : 0;
+    std::ostringstream oss;
+    cap(oss);
     n.expr_text = oss.str();
     return n;
 }
@@ -191,12 +210,6 @@ ccx_attr parse_attr(scanner& s, const brace_capture_fn& cap) {
     return a;
 }
 
-// JSX-style text normalization:
-// - If the run begins with whitespace + newline, drop that whole leading run.
-// - If it ends with newline + whitespace, drop that whole trailing run.
-// - Within the remaining content, split on newlines, left-trim each line,
-//   drop empty lines, join with a single space.
-// - If the run has no leading/trailing newline, it is kept verbatim.
 std::string normalize_text(const std::string& raw) {
     bool all_ws = true;
     for (char c : raw) if (!scanner::is_whitespace(c)) { all_ws = false; break; }
@@ -258,15 +271,14 @@ std::vector<ccx_node> parse_children(scanner& s,
                                      const std::unordered_set<std::string>& comps,
                                      const brace_capture_fn& cap,
                                      bool terminator_is_rbrace,
-                                     std::string_view element_name) {
+                                     std::string_view element_name,
+                                     const source_buffer* buf) {
     std::vector<ccx_node> children;
     while (!s.eof()) {
         char c = s.peek();
         if (c == '<') {
             if (s.peek(1) == '/') {
-                // Close tag — belongs to an element child
                 if (terminator_is_rbrace) fail(s, "unexpected closing tag in block body");
-                // Consume `</name>`
                 s.advance(2);
                 skip_ws(s);
                 std::string name = read_tag_name(s);
@@ -276,10 +288,9 @@ std::vector<ccx_node> parse_children(scanner& s,
                 if (name != element_name) fail(s, "mismatched closing tag");
                 return children;
             }
-            // Nested element
-            children.push_back(parse_element(s, comps, cap));
+            children.push_back(parse_element(s, comps, cap, buf));
         } else if (c == '{') {
-            children.push_back(parse_brace_child(s, comps, cap));
+            children.push_back(parse_brace_child(s, comps, cap, buf));
         } else if (c == '}' && terminator_is_rbrace) {
             return children;
         } else {
@@ -301,15 +312,17 @@ std::vector<ccx_node> parse_children(scanner& s,
 
 ccx_node parse_element(scanner& s,
                        const std::unordered_set<std::string>& comps,
-                       const brace_capture_fn& cap) {
+                       const brace_capture_fn& cap,
+                       const source_buffer* buf) {
     if (s.peek() != '<') fail(s, "expected '<' at element start");
+    size_t element_pos = s.pos();
     s.advance();
     skip_ws(s);
     ccx_node n;
     n.k = ccx_node::kind::element;
+    n.source_line = buf ? buf->line_of(element_pos) : 0;
     n.tag_name = read_tag_name(s);
     n.is_component = comps.count(n.tag_name) > 0;
-    // Parse attributes
     while (true) {
         skip_ws(s);
         char c = s.peek();
@@ -325,7 +338,7 @@ ccx_node parse_element(scanner& s,
     }
     if (s.peek() != '>') fail(s, "expected '>' at end of opening tag");
     s.advance();
-    n.children = parse_children(s, comps, cap, /*terminator_is_rbrace=*/false, n.tag_name);
+    n.children = parse_children(s, comps, cap, /*terminator_is_rbrace=*/false, n.tag_name, buf);
     return n;
 }
 

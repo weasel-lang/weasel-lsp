@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <unistd.h>
 
 namespace weasel::lsp {
@@ -53,6 +54,68 @@ std::string find_compile_commands_dir(std::string_view root_path_hint) {
         }
     } catch (...) {}
     return {};
+}
+
+// Return the content of 0-based line `n` from a multi-line string.
+std::string_view get_text_line(std::string_view text, int line_0) {
+    size_t pos = 0;
+    for (int i = 0; i < line_0; ++i) {
+        auto nl = text.find('\n', pos);
+        if (nl == std::string_view::npos) return {};
+        pos = nl + 1;
+    }
+    auto end = text.find('\n', pos);
+    if (end == std::string_view::npos) end = text.size();
+    return text.substr(pos, end - pos);
+}
+
+// For a hover request inside a CCX region, try to remap the column by locating
+// the identifier under the cursor in the corresponding .cc line.
+// Returns the 0-based .cc column, or nullopt if remapping is not possible.
+std::optional<int> remap_ccx_hover_column(const doc_state& d, int weasel_line_0, int weasel_char_0) {
+    auto cc_line = get_text_line(d.cc_text, weasel_line_0);
+    // If the .cc line is blank the emitter didn't produce content here — can't remap.
+    bool has_content = false;
+    for (char c : cc_line) {
+        if (c != ' ' && c != '\t') { has_content = true; break; }
+    }
+    if (!has_content) return std::nullopt;
+
+    auto weasel_line = get_text_line(d.text, weasel_line_0);
+    if (weasel_char_0 < 0 || (size_t)weasel_char_0 >= weasel_line.size())
+        return std::nullopt;
+
+    // Find the C++ identifier at the cursor position.
+    auto is_ident = [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+               (c >= '0' && c <= '9') || c == '_';
+    };
+    size_t cur = (size_t)weasel_char_0;
+    if (!is_ident(weasel_line[cur])) return std::nullopt;
+
+    size_t id_start = cur;
+    while (id_start > 0 && is_ident(weasel_line[id_start - 1])) --id_start;
+    size_t id_end = cur + 1;
+    while (id_end < weasel_line.size() && is_ident(weasel_line[id_end])) ++id_end;
+
+    std::string_view id_text = weasel_line.substr(id_start, id_end - id_start);
+    if (id_text.empty()) return std::nullopt;
+
+    // Search for the identifier in the .cc line (word-boundary match).
+    size_t search_from = 0;
+    while (search_from < cc_line.size()) {
+        auto pos = cc_line.find(id_text, search_from);
+        if (pos == std::string_view::npos) break;
+        bool left_ok  = (pos == 0) || !is_ident(cc_line[pos - 1]);
+        bool right_ok = (pos + id_text.size() >= cc_line.size()) ||
+                        !is_ident(cc_line[pos + id_text.size()]);
+        if (left_ok && right_ok) {
+            size_t offset_in_id = cur - id_start;
+            return static_cast<int>(pos + offset_in_id);
+        }
+        search_from = pos + 1;
+    }
+    return std::nullopt;
 }
 
 } // namespace
@@ -161,7 +224,17 @@ json server::on_initialize(const json& params) {
         };
         clangd_->send_request("initialize", init_params,
             [this](const json&, const json&) {
-                if (clangd_) clangd_->send_notification("initialized", json::object());
+                if (!clangd_) return;
+                clangd_->send_notification("initialized", json::object());
+                // Flush any didOpen/didChange notifications that arrived while
+                // clangd was still initializing; now that initialized is sent,
+                // clangd is ready to accept them.
+                clangd_initialized_ = true;
+                for (const auto& pending_uri : clangd_pending_open_uris_) {
+                    const doc_state* pd = docs_.find(pending_uri);
+                    if (pd) forward_to_clangd_open(*pd);
+                }
+                clangd_pending_open_uris_.clear();
             });
     }
 
@@ -267,6 +340,11 @@ void server::write_cc_to_disk(const doc_state& d) {
 
 void server::forward_to_clangd_open(const doc_state& d) {
     if (!clangd_ || !is_weasel_uri(d.uri)) return;
+    if (!clangd_initialized_) {
+        // Hold until "initialized" has been sent to clangd.
+        clangd_pending_open_uris_.push_back(d.uri);
+        return;
+    }
     std::string cc_uri = derive_cc_uri(d.uri);
     cc_to_weasel_uri_[cc_uri] = d.uri;
     clangd_->send_notification("textDocument/didOpen", {
@@ -389,6 +467,21 @@ bool server::forward_request_to_clangd(const json& id, const std::string& method
     } else if (method == "textDocument/definition" && in_ccx) {
         // CCX: components only. Don't proxy.
         return false;
+    } else if (method == "textDocument/hover" && in_ccx) {
+        // C++ expressions inside CCX {…} blocks: try to remap the column by
+        // finding the identifier under the cursor in the corresponding .cc line.
+        auto remapped_char = remap_ccx_hover_column(*d, line, character);
+        if (!remapped_char) return false;  // blank .cc line or no identifier match
+        std::string cc_uri = derive_cc_uri(uri);
+        json translated = params;
+        translated["textDocument"]["uri"] = cc_uri;
+        translated["position"]["character"] = *remapped_char;
+        json cap_id = id;
+        clangd_->send_request(method, translated,
+            [this, cap_id](const json& result, const json& err) {
+                write_to_editor(make_response(cap_id, err.is_null() ? result : json(nullptr)));
+            });
+        return true;
     }
 
     // For completion outside CCX, definition outside CCX (non-component), and
@@ -400,24 +493,17 @@ bool server::forward_request_to_clangd(const json& id, const std::string& method
 
     json cap_id = id;
     clangd_->send_request(method, translated,
-        [this, cap_id, uri](const json& result, const json& err) {
+        [this, cap_id, uri, cc_uri](const json& result, const json& err) {
             if (!err.is_null()) {
                 write_to_editor(make_response(cap_id, nullptr));
                 return;
             }
-            // Remap any Location(s) pointing at the .cc back to the .weasel.
-            auto remap = [&uri](json& loc) {
-                if (loc.is_object() && loc.contains("uri") &&
-                    loc.at("uri").is_string()) {
-                    std::string u = loc.at("uri").get<std::string>();
-                    // if the location points at our .cc, rewrite to .weasel
-                    // (the editor only knows the .weasel URI)
-                    constexpr std::string_view suffix = ".cc";
-                    if (u.size() >= suffix.size() &&
-                        u.compare(u.size() - suffix.size(), suffix.size(), suffix) == 0) {
-                        loc["uri"] = uri;
-                    }
-                }
+            // Remap locations pointing at our generated .cc back to the .weasel.
+            // Only rewrite the exact cc_uri we sent; leave other files (headers,
+            // other generated files) untouched.
+            auto remap = [&uri, &cc_uri](json& loc) {
+                if (loc.is_object() && loc.value("uri", "") == cc_uri)
+                    loc["uri"] = uri;
             };
             json out = result;
             if (out.is_array()) {
