@@ -1,6 +1,3 @@
-#include "weasel/factory.hpp"
-#include "weasel/node.hpp"
-#include "weasel/renderer.hpp"
 #include <iostream>
 #include <optional>
 #include <string>

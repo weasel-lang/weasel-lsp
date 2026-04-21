@@ -20,7 +20,7 @@ std::string_view get_text_line(std::string_view text, int line_0) {
 }
 
 std::optional<int> remap_ccx_hover_column(const doc_state& d, int weasel_line_0, int weasel_char_0) {
-    auto cc_line = get_text_line(d.cc_text, weasel_line_0);
+    auto cc_line = get_text_line(d.cc_text, weasel_line_0 + 1);
     bool has_content = false;
     for (char c : cc_line) {
         if (c != ' ' && c != '\t') {
@@ -68,7 +68,7 @@ std::optional<int> remap_ccx_hover_column(const doc_state& d, int weasel_line_0,
 }
 
 std::optional<int> remap_ccx_completion_column(const doc_state& d, int weasel_line_0, int weasel_char_0) {
-    auto cc_line = get_text_line(d.cc_text, weasel_line_0);
+    auto cc_line = get_text_line(d.cc_text, weasel_line_0 + 1);
     bool has_content = false;
     for (char c : cc_line) {
         if (c != ' ' && c != '\t') {

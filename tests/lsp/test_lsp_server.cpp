@@ -308,6 +308,7 @@ TEST_CASE("didSave writes .cc file next to .weasel") {
     CHECK(cc.is_open());
     std::string content((std::istreambuf_iterator<char>(cc)), std::istreambuf_iterator<char>());
     CHECK(!content.empty());
+    CHECK(content.substr(0, 10) == "#include \"");
 }
 
 TEST_CASE("malformed Content-Length is rejected without crashing") {

@@ -66,9 +66,9 @@ TEST_CASE("clangd proxy: diagnostics from mock clangd are remapped to .weasel UR
                             {"languageId", "weasel"},
                             {"version", 1},
                             {"text",
-                             "node f() {\n"        // cc line 1
-                             "  int x = 0;\n"      // cc line 2  (mock emits error here)
-                             "  return <div/>;\n"  // cc line 3  (ccx region)
+                             "node f() {\n"        // cc line 2 (line 1 is auto-preamble)
+                             "  int x = 0;\n"      // cc line 3
+                             "  return <div/>;\n"  // cc line 4  (ccx region)
                              "}\n"},
                         }},
                    }),
@@ -87,7 +87,7 @@ TEST_CASE("clangd proxy: diagnostics from mock clangd are remapped to .weasel UR
             if (d.value("source", "") == "mock-clangd") {
                 saw_clangd_diag = true;
                 int line = d.at("range").at("start").value("line", -1);
-                CHECK(line == 1);
+                CHECK(line == 0);  // mock emits at cc line 2 (0-indexed 1) = weasel line 1 (0-indexed 0)
             }
         }
     }

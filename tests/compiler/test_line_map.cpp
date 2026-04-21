@@ -19,7 +19,7 @@ TEST_CASE("transpile_with_map — pure C++ passthrough has one cpp span") {
     REQUIRE(r.ok);
     REQUIRE(r.line_map.size() == 1);
     CHECK(r.line_map[0].kind == span_kind::cpp_passthrough);
-    CHECK(r.line_map[0].cc_line_begin == 1);
+    CHECK(r.line_map[0].cc_line_begin == 2);  // line 1 is the auto-preamble
 }
 
 TEST_CASE("transpile_with_map — single CCX expression produces cpp + ccx spans") {

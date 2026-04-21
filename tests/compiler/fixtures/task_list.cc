@@ -1,6 +1,4 @@
-#include "weasel/factory.hpp"
-#include "weasel/node.hpp"
-#include "weasel/renderer.hpp"
+#include "weasel/weasel.hpp"
 #include <iostream>
 #include <optional>
 #include <string>
@@ -39,12 +37,12 @@ weasel::node badge(const badge_props& p) {
 weasel::node task_item(const task_item_props& p) {
     const bool show = p.show_assignee.value_or(true);
     return (
-        weasel::tag("li", {{"class", "task-item"}}, {
-weasel::tag("h3", {{"class", "task-title"}}, {weasel::text(p.item.title)}), 
+        weasel::tag("li", {{"class", "task-item"}}, {weasel::tag("h3", {{"class", "task-title"}}, {weasel::text(p.item.title)}), 
 
 [&]() -> weasel::node {if (show && !p.item.assignee.empty()) { return 
 weasel::tag("p", {{"class", "assignee"}}, {weasel::text("Assigned to: "), 
 badge({.label = (p.item.assignee), .color = "blue"})}); } return weasel::node{}; }()})
+
 
 
 
@@ -55,15 +53,15 @@ badge({.label = (p.item.assignee), .color = "blue"})}); } return weasel::node{};
 weasel::node task_list(const task_list_props& p) {
     return (
         weasel::tag("div", {{"class", "page"}}, {
-
 [&]() -> weasel::node {if (p.title) { return 
 weasel::tag("h2", {}, {weasel::text(*p.title)}); } return weasel::node{}; }(), 
 
 
 weasel::tag("ul", {{"class", "task-list"}}, {
 
-[&]() -> weasel::node { weasel::node_list __w; for (const auto& t : p.items) { __w.push_back(
-task_item({.item = (t)})); } return weasel::fragment(std::move(__w)); }()})})
+[&]() -> weasel::node { weasel::node_list weasel_nodes_; for (const auto& t : p.items) { weasel_nodes_.push_back(
+task_item({.item = (t)})); } return weasel::fragment(std::move(weasel_nodes_)); }()})})
+
 
 
 

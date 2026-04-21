@@ -61,7 +61,9 @@ class driver {
            const transpile_options& opts,
            std::vector<line_span>* line_map,
            const source_buffer* buf)
-        : s_(src), out_(&out), counter_(counter), components_(components), opts_(&opts), line_map_(line_map), buf_(buf) {}
+        : s_(src), out_(&out), counter_(counter), components_(components), opts_(&opts), line_map_(line_map), buf_(buf) {
+        if (counter_) cc_line_cursor_ = counter_->line();
+    }
 
     void run() {
         while (!s_.eof())
@@ -498,6 +500,7 @@ std::unordered_set<std::string> collect_components(std::string_view src) {
 }
 
 void transpile(std::string_view src, std::ostream& out, const transpile_options& opts) {
+    out << "#include \"weasel/weasel.hpp\"\n";
     auto components = collect_components(src);
     driver d(src, out, nullptr, components, opts, nullptr, nullptr);
     d.run();
@@ -511,6 +514,7 @@ transpile_result transpile_with_map(std::string_view src, std::ostream& out, con
 
     counting_streambuf counter(out.rdbuf());
     std::ostream counted(&counter);
+    counted << "#include \"weasel/weasel.hpp\"\n";
     try {
         driver d(src, counted, &counter, components, opts, &r.line_map, &buf);
         d.run();

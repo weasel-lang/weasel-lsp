@@ -13,7 +13,7 @@ static std::string run(std::string_view src) {
     return oss.str();
 }
 
-TEST_CASE("passthrough: no weasel syntax = identical output") {
+TEST_CASE("passthrough: no weasel syntax gets preamble prepended") {
     std::string src =
         "#include <vector>\n"
         "// a comment with <angle> brackets\n"
@@ -23,7 +23,8 @@ TEST_CASE("passthrough: no weasel syntax = identical output") {
         "    std::string s = \"<div>not ccx</div>\";\n"
         "    return 0;\n"
         "}\n";
-    CHECK(run(src) == src);
+    const std::string preamble = "#include \"weasel/weasel.hpp\"\n";
+    CHECK(run(src) == preamble + src);
 }
 
 TEST_CASE("component keyword rewrites to weasel::node") {
