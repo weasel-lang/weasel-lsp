@@ -222,7 +222,12 @@ json server::on_initialize(const json& params) {
     }
 
     json capabilities = {
-        {"textDocumentSync", 1},
+        {"textDocumentSync",
+         {
+             {"openClose", true},
+             {"change", 1},
+             {"save", true},
+         }},
         {"definitionProvider", true},
         {"completionProvider",
          {

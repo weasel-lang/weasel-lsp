@@ -1,6 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest.h>
 
+#include <fstream>
 #include <sstream>
 #include <string>
 #include "weasel/lsp/jsonrpc.hpp"
@@ -52,6 +53,14 @@ std::vector<json> drive(const std::vector<json>& inputs) {
     return parse_all_framed(out.str());
 }
 
+// drive() variant that runs with clangd disabled, for tests of native fallback behavior.
+std::vector<json> drive_no_clangd(const std::vector<json>& inputs) {
+    setenv("WEASEL_LSP_NO_CLANGD", "1", 1);
+    auto result = drive(inputs);
+    unsetenv("WEASEL_LSP_NO_CLANGD");
+    return result;
+}
+
 }  // namespace
 
 TEST_CASE("initialize → initialize response with capabilities") {
@@ -67,7 +76,8 @@ TEST_CASE("initialize → initialize response with capabilities") {
     const auto& caps = msgs[0].at("result").at("capabilities");
     CHECK(caps.at("definitionProvider") == true);
     CHECK(caps.contains("completionProvider"));
-    CHECK(caps.at("textDocumentSync") == 1);
+    CHECK(caps.at("textDocumentSync").at("change") == 1);
+    CHECK(caps.at("textDocumentSync").at("save") == true);
 }
 
 TEST_CASE("didOpen publishes diagnostics (success: empty list)") {
@@ -214,7 +224,7 @@ TEST_CASE("completion inside CCX expression {…} returns empty not HTML tags") 
     // Without clangd, expression positions should yield nothing (not spurious HTML).
     // Source line 0: node f(int x) { return <div class={x}>hi</div>; }
     // The {x} attribute expression starts at column 34 (0-based).
-    auto msgs = drive({
+    auto msgs = drive_no_clangd({
         make_request(1, "initialize", json::object()),
         make_notif("textDocument/didOpen",
                    {
@@ -250,7 +260,7 @@ TEST_CASE("completion inside CCX expression {…} returns empty not HTML tags") 
 }
 
 TEST_CASE("completion outside CCX is empty (v0.5)") {
-    auto msgs = drive({
+    auto msgs = drive_no_clangd({
         make_request(1, "initialize", json::object()),
         make_notif("textDocument/didOpen",
                    {
@@ -277,6 +287,27 @@ TEST_CASE("completion outside CCX is empty (v0.5)") {
     }
     REQUIRE(!resp.is_null());
     CHECK(resp.at("result").at("items").empty());
+}
+
+TEST_CASE("didSave writes .cc file next to .weasel") {
+    const std::string weasel_uri = "file:///tmp/weasel_lsp_test_save.weasel";
+    const std::string cc_path = "/tmp/weasel_lsp_test_save.cc";
+    std::remove(cc_path.c_str());
+
+    drive({
+        make_request(1, "initialize", json::object()),
+        make_notif("textDocument/didOpen",
+                   {{"textDocument",
+                     {{"uri", weasel_uri}, {"languageId", "weasel"}, {"version", 1}, {"text", "node f() { return <p>hi</p>; }\n"}}}}),
+        make_notif("textDocument/didSave", {{"textDocument", {{"uri", weasel_uri}}}}),
+        make_request(2, "shutdown"),
+        make_notif("exit", json::object()),
+    });
+
+    std::ifstream cc(cc_path);
+    CHECK(cc.is_open());
+    std::string content((std::istreambuf_iterator<char>(cc)), std::istreambuf_iterator<char>());
+    CHECK(!content.empty());
 }
 
 TEST_CASE("malformed Content-Length is rejected without crashing") {
