@@ -105,7 +105,7 @@ jobs:
             -e "s/PLACEHOLDER_LINUX_X86_64/${sha_linux_x86_64}/" \
             packaging/homebrew/weasel.rb
 
-          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/weasel-lang/homebrew-weasel.git tap
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/weasel-lang/weasel-homebrew.git tap
           mkdir -p tap/Formula
           cp packaging/homebrew/weasel.rb tap/Formula/weasel.rb
 

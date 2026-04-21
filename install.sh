@@ -1,11 +1,11 @@
 #!/usr/bin/env sh
 # Install weaselc from the latest GitHub Release.
-# Usage: curl -fsSL https://raw.githubusercontent.com/weasel-lang/language-services-weasel/main/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/weasel-lang/weasel-lsp/main/install.sh | sh
 # Override destination: INSTALL_DIR=/usr/local/bin sh install.sh
 
 set -e
 
-REPO="weasel-lang/language-services-weasel"
+REPO="weasel-lang/weasel-lsp"
 BINARY="weaselc"
 
 # Detect OS
